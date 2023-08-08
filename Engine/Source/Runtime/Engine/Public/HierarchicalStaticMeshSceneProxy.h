@@ -48,6 +48,7 @@ class FHierarchicalStaticMeshSceneProxy final : public FInstancedStaticMeshScene
 	UE::FMutex OcclusionResultsMutex;
 	EHISMViewRelevanceType ViewRelevance;
 	bool bDitheredLODTransitions;
+	bool bUseLiteGPUScene;
 	uint32 SceneProxyCreatedFrameNumberRenderThread;
 
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)

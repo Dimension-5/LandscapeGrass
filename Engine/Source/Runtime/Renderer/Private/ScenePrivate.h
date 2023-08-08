@@ -55,6 +55,10 @@
 #include "GlobalDistanceField.h"
 #include "Algo/RemoveIf.h"
 #include "UObject/Package.h"
+// ++[D5]
+#include "ScatterBuffer.h"
+#include "Components/LiteGPUSceneComponent.h"
+// --[D5]
 
 /** Factor by which to grow occlusion tests **/
 #define OCCLUSION_SLOP (1.0f)
@@ -2775,6 +2779,34 @@ private:
 	FLumenSceneDataMap::TConstIterator NextSceneData;
 };
 
+class RENDERER_API FLiteGPUSceneBufferManager : public FRenderResource, public FLiteGPUSceneBufferManagerInterface
+{
+public:
+	FLiteGPUSceneBufferManager(ERHIFeatureLevel::Type InFeatureLevel);
+
+	// FRenderResource interface
+	virtual void InitRHI(FRHICommandListBase& RHICmdList);
+	virtual void ReleaseRHI();
+
+	void UpdateUploader(FRHICommandList& RHICmdList, class FLiteGPUSceneInstanceData* InstanceDataPtr, int32 DirtyCount) override;
+
+	void InitRenderResource();
+	void ReleaseRenderResource();
+	FGVDBScatterDoubleBufferUploader* RWInstanceInstanceIndicesBufferUploader;
+	FGVDBScatterDoubleBufferUploader* RWInstancedAABBBufferUploader;
+
+	FGVDBScatterDoubleBufferUploader* RWInstanceLocationBufferUploader;
+	FGVDBScatterDoubleBufferUploader* RWInstanceScaleBufferUploader;
+	FGVDBScatterDoubleBufferUploader* RWInstanceTransformBufferUploader;
+	FGVDBScatterDoubleBufferUploader* RWInstanceTypeBufferUploader;
+
+	FGVDBScatterDoubleBufferUploader* RWInstancePatchNumBufferUploader;
+	FGVDBScatterDoubleBufferUploader* RWInstancePatchStartBufferUploader;
+	FGVDBScatterDoubleBufferUploader* RWInstancePatchIDsBufferUploader;
+
+	bool bInitialized = false;
+};
+
 /** 
  * Renderer scene which is private to the renderer module.
  * Ordinarily this is the renderer version of a UWorld, but an FScene can be created for previewing in editors which don't have a UWorld as well.
@@ -3001,6 +3033,10 @@ public:
 	/** The decals in the scene. */
 	TSparseArray<FDeferredDecalProxy*> Decals;
 
+	// ++[D5]
+	TArray<class FLiteGPUSceneProxy*> CachedLiteGPUScene;
+	// --[D5]
+
 	/** Potential capsule shadow casters registered to the scene. */
 	TArray<FPrimitiveSceneInfo*> DynamicIndirectCasterPrimitives; 
 
@@ -3172,6 +3208,10 @@ public:
 
 	FSpanAllocator PersistentPrimitiveIdAllocator;
 
+	//++[D5]
+	class FLiteGPUSceneBufferManager* pLiteGPUSceneBufferManager;
+	//--[D5]
+
 #if WITH_EDITOR
 	/** Editor Pixel inspector */
 	FPixelInspectorData PixelInspectorData;
@@ -3221,6 +3261,11 @@ public:
 	virtual void UpdateDecalTransform(UDecalComponent* Decal) override;
 	virtual void UpdateDecalFadeOutTime(UDecalComponent* Decal) override;
 	virtual void UpdateDecalFadeInTime(UDecalComponent* Decal) override;
+	// ++[D5]
+	virtual void InitializeLiteGPUSceneBufferManager() override;
+	virtual class FLiteGPUSceneBufferManager* GetLiteGPUSceneBufferManager() { return pLiteGPUSceneBufferManager; }
+	virtual void AddOrRemoveLiteGPUSceneProxy_RenderingThread(class FLiteGPUSceneProxy* Proxy, bool bAdd) override;
+	// --[D5]
 	virtual void BatchUpdateDecals(TArray<FDeferredDecalUpdateParams>&& UpdateParams) override;
 	virtual void AddReflectionCapture(UReflectionCaptureComponent* Component) override;
 	virtual void RemoveReflectionCapture(UReflectionCaptureComponent* Component) override;

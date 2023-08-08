@@ -8,6 +8,9 @@
 #include "Async/AsyncWork.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "StaticMeshResources.h"
+//++[D5]
+#include "LiteGPUSceneComponent.h"
+//--[D5]
 
 #include "HierarchicalInstancedStaticMeshComponent.generated.h"
 
@@ -143,6 +146,11 @@ class UHierarchicalInstancedStaticMeshComponent : public UInstancedStaticMeshCom
 
 	TSharedPtr<TArray<FClusterNode>, ESPMode::ThreadSafe> ClusterTreePtr;
 
+	// ++[D5] 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Culling)
+	bool bUseLiteGPUScene = false;
+	// --[D5]
+	
 	// If true then we allow a translated space when building the cluster tree.
 	// This can help for impementations (foliage) where we can have instances with offsets to large for single float precision.
 	UPROPERTY()
@@ -206,6 +214,15 @@ class UHierarchicalInstancedStaticMeshComponent : public UInstancedStaticMeshCom
 	bool bIsOutOfDate : 1;
 	bool bConcurrentChanges : 1;
 	bool bAutoRebuildTreeOnInstanceChanges : 1;
+
+	//++[D5]
+public:
+	int32 InstanceCount = 0;
+	TArray<uint32> GPUDrivenInstanceIndices;
+	int32 RemoveOffset = 0;
+	int32 IncreasedOffset = 0;
+	TArray<FInstancedLiteGPUSceneData> LiteGPUSceneDatas;
+	//--[D5]
 
 #if WITH_EDITOR
 	// in Editor mode we might disable the density scaling for edition

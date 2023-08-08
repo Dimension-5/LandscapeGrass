@@ -2862,6 +2862,16 @@ void FScene::AddOrRemoveDecal_RenderThread(FDeferredDecalProxy* Proxy, bool bAdd
 	}
 }
 
+// ++[D5]
+void FScene::AddOrRemoveLiteGPUSceneProxy_RenderingThread(class FLiteGPUSceneProxy* Proxy, bool bAdd)
+{
+	if (bAdd)
+		CachedLiteGPUScene.AddUnique(Proxy);
+	else
+		CachedLiteGPUScene.Remove(Proxy);
+}
+// --[D5]
+
 void FScene::SetPhysicsField(FPhysicsFieldSceneProxy* PhysicsFieldSceneProxy)
 {
 	check(PhysicsFieldSceneProxy);

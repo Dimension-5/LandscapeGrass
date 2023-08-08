@@ -842,6 +842,9 @@ SIZE_T FHierarchicalStaticMeshSceneProxy::GetTypeHash() const
 
 FHierarchicalStaticMeshSceneProxy::FHierarchicalStaticMeshSceneProxy(UHierarchicalInstancedStaticMeshComponent* InComponent, ERHIFeatureLevel::Type InFeatureLevel)
 : FInstancedStaticMeshSceneProxy(InComponent, InFeatureLevel)
+// ++[D5]
+, bUseLiteGPUScene(InComponent->bUseLiteGPUScene)
+// --[D5]
 , ClusterTreePtr(InComponent->ClusterTreePtr.ToSharedRef())
 , ClusterTree(*InComponent->ClusterTreePtr)
 , UnbuiltBounds(InComponent->UnbuiltInstanceBoundsList)
@@ -1281,7 +1284,8 @@ void FHierarchicalStaticMeshSceneProxy::FillDynamicMeshElements(const FSceneView
 	int32 FirstLOD = FMath::Max((OnlyLOD < 0) ? 0 : OnlyLOD, static_cast<int32>(this->GetCurrentFirstLODIdx_Internal()));
 	int32 LastLODPlusOne = (OnlyLOD < 0) ? InstancedRenderData.VertexFactories.Num() : (OnlyLOD+1);
 
-	const bool bUseGPUScene = UseGPUScene(GetScene().GetShaderPlatform(), GetScene().GetFeatureLevel());
+	const bool bUseGPUScene = 
+		UseGPUScene(GetScene().GetShaderPlatform(), GetScene().GetFeatureLevel());
 
 	for (int32 LODIndex = FirstLOD; LODIndex < LastLODPlusOne; LODIndex++)
 	{
@@ -1535,6 +1539,11 @@ void FHierarchicalStaticMeshSceneProxy::FillDynamicMeshElements(const FSceneView
 
 void FHierarchicalStaticMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
 {
+	// ++[D5] 
+	if (bUseLiteGPUScene)
+		return;
+	// --[D5]
+
 	if (Views[0]->bRenderFirstInstanceOnly)
 	{
 		FInstancedStaticMeshSceneProxy::GetDynamicMeshElements(Views, ViewFamily, VisibilityMap, Collector);
@@ -2073,6 +2082,9 @@ static FBox GetClusterTreeBounds(TArray<FClusterNode> const& InClusterTree, FVec
 
 UHierarchicalInstancedStaticMeshComponent::UHierarchicalInstancedStaticMeshComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
+	// ++[D5] 
+	, bUseLiteGPUScene(false)
+	// --[D5]
 	, ClusterTreePtr(MakeShareable(new TArray<FClusterNode>))
 	, bUseTranslatedInstanceSpace(false)
 	, TranslatedInstanceSpaceOrigin(ForceInitToZero)
@@ -3033,6 +3045,11 @@ void UHierarchicalInstancedStaticMeshComponent::ApplyBuildTree(FClusterBuilder& 
 
 bool UHierarchicalInstancedStaticMeshComponent::BuildTreeIfOutdated(bool Async, bool ForceUpdate)
 {
+	// ++[D5] 
+	if (bUseLiteGPUScene)
+		return true;
+	// --[D5]
+	
 	// The tree will be fully rebuilt once the static mesh compilation is finished.
 	if (HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject) || (GetStaticMesh() && GetStaticMesh()->IsCompiling()))
 	{

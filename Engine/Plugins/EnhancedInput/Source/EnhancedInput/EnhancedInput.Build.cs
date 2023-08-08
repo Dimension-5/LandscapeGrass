@@ -6,7 +6,7 @@ namespace UnrealBuildTool.Rules
 	{
         public EnhancedInput(ReadOnlyTargetRules Target) : base(Target)
         {
-            PrivateDependencyModuleNames.AddRange(
+			PrivateDependencyModuleNames.AddRange(
 				new string[] {
                     "ApplicationCore",
 					"Core",

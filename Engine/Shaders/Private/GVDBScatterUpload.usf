@@ -1,0 +1,55 @@
+#include "Common.ush"
+
+uint NumScatters;
+Buffer<uint> ScatterBuffer;
+
+#if FLOAT_BUFFER
+#define SrcDataType float
+#define DstDataType float
+
+#elif FLOAT2_BUFFER
+#define SrcDataType float2
+#define DstDataType float2
+
+#elif FLOAT3_BUFFER
+#define SrcDataType float3
+#define DstDataType float3
+
+#elif FLOAT4_BUFFER
+#define SrcDataType float4
+#define DstDataType float4
+
+#elif SINT_BUFFER
+#define SrcDataType int
+#define DstDataType int
+
+#elif SINT4_BUFFER
+#define SrcDataType int4
+#define DstDataType int4
+
+#elif UINT_BUFFER
+#define SrcDataType uint
+#define DstDataType uint
+
+#endif
+
+#ifndef SrcDataType
+#define SrcDataType float4
+#endif
+
+#ifndef DstDataType
+#define DstDataType float4
+#endif
+
+Buffer<SrcDataType> Src;
+RWBuffer<DstDataType> Dst;
+
+[numthreads(THREAD_COUNT, 1, 1)]
+void GVDBScatterUploadCS(uint3 DTid : SV_DispatchThreadID)
+{
+	if (DTid.x < NumScatters)
+	{
+		uint UploadIndex = ScatterBuffer[DTid.x];
+		Dst[UploadIndex] = Src[DTid.x];
+	}
+}
