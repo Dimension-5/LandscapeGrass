@@ -3209,7 +3209,7 @@ public:
 	FSpanAllocator PersistentPrimitiveIdAllocator;
 
 	//++[D5]
-	class FLiteGPUSceneBufferManager* pLiteGPUSceneBufferManager;
+	class FLiteGPUSceneBufferManager* pLiteGPUSceneBufferManager = nullptr;
 	//--[D5]
 
 #if WITH_EDITOR

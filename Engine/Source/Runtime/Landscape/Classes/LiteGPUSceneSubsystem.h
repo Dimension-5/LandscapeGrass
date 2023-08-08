@@ -5,8 +5,23 @@
 
 class ULiteGPUSceneComponent;
 class UHierarchicalInstancedStaticMeshComponent;
+class ULiteGPUSceneSubsystem;
 using HISMComponent = UHierarchicalInstancedStaticMeshComponent;
 using HISMArray = TArray<HISMComponent*>;
+
+struct FLiteGPUSceneSubsystemTickFunction : public FTickFunction
+{
+	FLiteGPUSceneSubsystemTickFunction() {}
+	virtual ~FLiteGPUSceneSubsystemTickFunction() {}
+
+	// Begin FTickFunction overrides
+	virtual void ExecuteTick(float DeltaTime, enum ELevelTick TickType, ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent) override;
+	virtual FString DiagnosticMessage() override;
+	virtual FName DiagnosticContext(bool bDetailed) override;
+	// End FTickFunction overrides
+
+	class ALiteGPUSceneManager* Manager;
+};
 
 UCLASS()
 class LANDSCAPE_API ULiteGPUSceneSubsystem : public UEngineSubsystem
@@ -39,4 +54,10 @@ private:
 	virtual void PreRegisterAllComponents() override;
 	virtual void UnregisterAllComponents(bool bForReregister = false) override;
 	void BuildHSIMComponents(HISMArray& Arr);
+
+	friend class ULiteGPUSceneSubsystem;
+	void DoTick(float DeltaTime, enum ELevelTick TickType, ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent);
+
+	friend struct FLiteGPUSceneSubsystemTickFunction;
+	FLiteGPUSceneSubsystemTickFunction TickFunction;
 };

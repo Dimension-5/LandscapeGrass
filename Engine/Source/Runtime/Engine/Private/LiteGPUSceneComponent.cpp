@@ -49,11 +49,11 @@ static FAutoConsoleVariableRef CVarDrawLiteGPUScene(
 	ECVF_Scalability
 );
 
-#define ONEFRAME_UPDATE_INSTANCE_NUM 1024
+#define ONEFRAME_UPDATE_INSTANCE_NUM 4096
 #define ONEFRAME_REMOVE_INSTANCE_NUM 256
 #define ONEFRAME_UPDATE_GROUP_NUM 2
 #define MAX_DIRTY_BUFFER_NUM ((ONEFRAME_UPDATE_INSTANCE_NUM  + ONEFRAME_REMOVE_INSTANCE_NUM) * ONEFRAME_UPDATE_GROUP_NUM)
-#define MAX_BUFFER_ARRAY_NUM 1024 * 256
+#define MAX_BUFFER_ARRAY_NUM 1024 * 1024 * 16
 
 FLiteGPUSceneMeshPatchInfo::FLiteGPUSceneMeshPatchInfo()
 	:MeshIndex(0)
@@ -365,17 +365,11 @@ void FLiteGPUSceneInstanceData::InitInstanceData(class ULiteGPUSceneComponent* C
 	PatchAABBData.SetNum(2 * sizeof(FVector4f) * FoliageTypeNum);
 	FMemory::Memcpy(PatchAABBData.GetData(), FoliageAABBs.GetData(), 2 * FoliageTypeNum * sizeof(FVector4f));
 
-
 	UploadInstanceScaleData.SetNum(MAX_BUFFER_ARRAY_NUM);
-
 	UploadInstanceTransformData.SetNum(MAX_BUFFER_ARRAY_NUM * 4);
-
-
 	UploadInstanceFoliageTypeData.SetNum(MAX_BUFFER_ARRAY_NUM);
-
 	UploadInstancePatchIDs.SetNum(MAX_BUFFER_ARRAY_NUM * PerPatchMaxNum);
 	UploadInstancePatchNum.SetNum(MAX_BUFFER_ARRAY_NUM);
-
 #if PLATFORM_WINDOWS
 	UpdateDirtyInstanceIndices.SetNum(MAX_DIRTY_BUFFER_NUM);
 #else
@@ -387,7 +381,6 @@ void FLiteGPUSceneInstanceData::InitInstanceData(class ULiteGPUSceneComponent* C
 	}
 	FrameBufferSelectionCounter = 0;
 #endif
-
 	InstancedKeyComponents.SetNum(MAX_BUFFER_ARRAY_NUM);
 
 	FLiteGPUSceneInstanceData* InitDataPtr = this;
@@ -544,11 +537,7 @@ void FLiteGPUSceneInstanceData::UpdateRemoveData(class ULiteGPUSceneComponent* C
 	if (Key->RemoveOffset < Key->InstanceCount)
 	{
 		int32 InstanceCountToRemove = FMath::Min<uint32>(ONEFRAME_REMOVE_INSTANCE_NUM, Key->InstanceCount - Key->RemoveOffset);
-
-
 		uint32 Num = InstanceNum;
-
-
 		InstanceNum -= InstanceCountToRemove;
 		Comp->AllInstanceNum -= InstanceCountToRemove;
 
@@ -574,7 +563,6 @@ void FLiteGPUSceneInstanceData::UpdateRemoveData(class ULiteGPUSceneComponent* C
 				{
 					UploadInstanceTransformData[RemovedIndex * 4 + i] = UploadInstanceTransformData[LastIndex * 4 + i];
 				}
-
 
 				UploadInstancePatchNum[RemovedIndex] = UploadInstancePatchNum[LastIndex];
 				UploadInstancePatchNum[LastIndex] = 0;
@@ -654,7 +642,6 @@ void FLiteGPUSceneInstanceData::UpdateInstanceData(ULiteGPUSceneComponent* Comp)
 	auto* pBufferManager = Comp->GetGPUDrivenBufferManager();
 	CulledAllPatchNum = AllPatches.Num();
 
-#if PLATFORM_WINDOWS
 	int32 DirtyCount = DirtyInstanceNum;
 	ENQUEUE_RENDER_COMMAND(UpdateInstanceDataRenderingThread)(
 		[DirtyCount, InitDataPtr, pBufferManager](FRHICommandList& RHICmdList)
@@ -666,21 +653,6 @@ void FLiteGPUSceneInstanceData::UpdateInstanceData(ULiteGPUSceneComponent* Comp)
 		}
 	);
 	bUpdateFrame = false;
-#else
-	uint32 FrameIndex = FrameBufferSelectionCounter;
-
-	ENQUEUE_RENDER_COMMAND(UpdateInstanceDataRenderingThread)(
-		[FrameIndex, InitDataPtr, pBufferManager](FRHICommandList& RHICmdList)
-		{
-			if (pBufferManager)
-			{
-				pBufferManager->UpdateUploader(RHICmdList, InitDataPtr, FrameIndex);
-			}
-		}
-	);
-
-	CurrentFrameData.bUpdateFrame = false;
-#endif
 }
 
 
@@ -691,8 +663,6 @@ void FLiteGPUSceneInstanceData::Initialize_RenderingThread()
 	{
 		return;
 	}
-
-
 
 	if (nullptr == AllPatchInfoBuffer)
 	{
@@ -1293,13 +1263,13 @@ void ULiteGPUSceneComponent::BuildLiteGPUScene(const TArray<UStaticMesh*> InAllM
 void ULiteGPUSceneComponent::AddInstanceGroup(class UHierarchicalInstancedStaticMeshComponent* HComponent)
 {
 	SCOPE_CYCLE_COUNTER(STAT_AddInstanceGroup);
-	if (PerPatchMaxNum == 0 || !IsRegistered())
+	if (PerPatchMaxNum == 0 || !IsRegistered() || 
+		(INDEX_NONE != IncreasedHISMs.Find(HComponent))
+		)
 	{
 		return;
 	}
 	UWorld* World = GetWorld();
-
-
 	if (!HComponent || AllSourceMeshes.Num() <= 0 || !World)
 	{
 		return;
@@ -1333,8 +1303,6 @@ void ULiteGPUSceneComponent::AddInstanceGroup(class UHierarchicalInstancedStatic
 		float DistSq = FVector::DistSquared(ViewLocation, InstanceLocation);
 		// Here using a binary search scheme to find location of the new component
 		int32 Mid = IncreasedHISMs.Num();
-
-
 		if (Mid == 0)
 		{
 			IncreasedHISMs.Add(HComponent);
@@ -1450,7 +1418,7 @@ void ULiteGPUSceneComponent::UpdateIncreasedGroup()
 				FVector ViewLocation = World->ViewLocationsRenderedLastFrame[ViewIndex];
 				FVector InstanceLocation = FVector(T.M[3][0], T.M[3][1], T.M[3][2]);
 
-				if (FVector::DistSquared(ViewLocation, InstanceLocation) < 1000000.0f)
+				if (FVector::DistSquared(ViewLocation, InstanceLocation) < 10000000.0f)
 				{
 					uint8 MeshIndex = SharedPerInstanceData->UploadInstanceFoliageTypeData[Index];
 					FBoxSphereBounds Bound = AllSourceMeshes[MeshIndex]->GetBounds();

@@ -4,6 +4,23 @@
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All)
 static TMap<UWorld*, ALiteGPUSceneManager*> GLiteGPUSceneManagers;
 
+void FLiteGPUSceneSubsystemTickFunction::ExecuteTick(float DeltaTime, enum ELevelTick TickType, ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
+{
+	Manager->DoTick(DeltaTime, TickType, CurrentThread, MyCompletionGraphEvent);
+}
+
+FString FLiteGPUSceneSubsystemTickFunction::DiagnosticMessage()
+{
+	static const FString Message(TEXT("FLiteGPUSceneSubsystemTickFunction"));
+	return Message;
+}
+
+FName FLiteGPUSceneSubsystemTickFunction::DiagnosticContext(bool bDetailed)
+{
+	static const FName Context(TEXT("FLiteGPUSceneSubsystemTickFunction"));
+	return Context;
+}
+
 void ULiteGPUSceneSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	IConsoleManager::Get().RegisterConsoleCommand(
@@ -43,6 +60,15 @@ void ALiteGPUSceneManager::PreRegisterAllComponents()
 {
 	Super::PreRegisterAllComponents();
 	GLiteGPUSceneManagers.FindOrAdd(GetWorld(), this);
+
+	// Register Tick 
+	TickFunction.Manager = this;
+	TickFunction.bCanEverTick = true;
+	TickFunction.bTickEvenWhenPaused = true;
+	TickFunction.bStartWithTickEnabled = true;
+	TickFunction.TickGroup = TG_DuringPhysics;
+	TickFunction.bAllowTickOnDedicatedServer = false;
+	TickFunction.RegisterTickFunction(GetWorld()->PersistentLevel);
 }
 
 void ALiteGPUSceneManager::UnregisterAllComponents(bool bForReregister)
@@ -102,5 +128,35 @@ void ALiteGPUSceneManager::BuildHSIMComponents(HISMArray& InMeshes)
 
 		LiteGPUSceneComp->BuildLiteGPUScene(LiteMeshes);
 		LiteGPUSceneComp->GetOutermost()->MarkPackageDirty();
+	}
+
+	for (auto& HISM : InMeshes)
+	{
+		LiteGPUSceneComp->AddInstanceGroup(HISM);
+	}
+}
+
+void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE(ALiteGPUSceneManager::Tick);
+
+	static auto CVarEnable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.Enable"));
+	bool bEnableLiteGPUScene = CVarEnable ? CVarEnable->GetInt() > 0 : false;
+	if (bEnableLiteGPUScene)
+	{
+		if (!LiteGPUSceneComp || !LiteGPUSceneComp->IsInitialized())
+		{
+			return;
+		}
+		if (LiteGPUSceneComp->SharedPerInstanceData.IsValid())
+		{
+			LiteGPUSceneComp->SharedPerInstanceData->DirtyInstanceNum = 0;
+		}
+		if (LiteGPUSceneComp)
+		{
+			LiteGPUSceneComp->UpdateIncreasedGroup();
+			LiteGPUSceneComp->UpdateRemovedGroup();
+			LiteGPUSceneComp->UpdateRenderThread();
+		}
 	}
 }

@@ -5359,6 +5359,10 @@ void FScene::UpdateAllPrimitiveSceneInfos(FRDGBuilder& GraphBuilder, EUpdateAllP
 	SCOPED_NAMED_EVENT(FScene_UpdateAllPrimitiveSceneInfos, FColor::Orange);
 	SCOPE_CYCLE_COUNTER(STAT_UpdateScenePrimitiveRenderThreadTime);
 
+	// ++[D5]
+	InitializeLiteGPUSceneBufferManager();
+	// --[D5]
+
 	check(IsInRenderingThread());
 	FSceneRenderer::WaitForCleanUpTasks(GraphBuilder.RHICmdList);
 	FMaterialRenderProxy::UpdateDeferredCachedUniformExpressions();

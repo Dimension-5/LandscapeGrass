@@ -2435,7 +2435,6 @@ bool UHierarchicalInstancedStaticMeshComponent::UpdateInstanceTransform(int32 In
 		
 		if (!bIsOmittedInstance)
 		{
-
 			InstanceUpdateCmdBuffer.UpdateInstance(RenderIndex, NewLocalTransform.ToMatrixWithScale().ConcatTranslation(-TranslatedInstanceSpaceOrigin));
 			bMarkRenderStateDirty = true;
 		}
@@ -3077,6 +3076,9 @@ bool UHierarchicalInstancedStaticMeshComponent::BuildTreeIfOutdated(bool Async, 
 			// ++[D5] 
 			if (bUseLiteGPUScene)
 			{
+				TranslatedInstanceSpaceOrigin = CalcTranslatedInstanceSpaceOrigin();
+				InitializeInstancingRandomSeed();
+				GetInstanceTransforms(LiteGPUSceneDatas, -TranslatedInstanceSpaceOrigin);
 				bIsOutOfDate = false;
 				return true;
 			}
@@ -3101,11 +3103,9 @@ bool UHierarchicalInstancedStaticMeshComponent::BuildTreeIfOutdated(bool Async, 
 			{
 				BuildTree();
 			}
-
 			return true;
 		}
 	}
-
 	return false;
 }
 
@@ -3120,6 +3120,22 @@ FVector UHierarchicalInstancedStaticMeshComponent::CalcTranslatedInstanceSpaceOr
 	// For simplicity we use the first instance as the origin of the translated space.
 	return bUseTranslatedInstanceSpace && PerInstanceSMData.Num() ? PerInstanceSMData[0].Transform.GetOrigin() : FVector::Zero();
 }
+
+//++[D5]
+void UHierarchicalInstancedStaticMeshComponent::GetInstanceTransforms(TArray<FInstancedLiteGPUSceneData>& InstanceTransforms, FVector const& Offset) const
+{
+	double StartTime = FPlatformTime::Seconds();
+	int32 Num = PerInstanceSMData.Num();
+
+	InstanceTransforms.SetNumUninitialized(Num);
+	for (int32 Index = 0; Index < Num; Index++)
+	{
+		InstanceTransforms[Index].TransformsData = PerInstanceSMData[Index].Transform.ConcatTranslation(Offset);
+	}
+
+	UE_LOG(LogStaticMesh, Verbose, TEXT("Copied %d transforms in %.3fs."), Num, float(FPlatformTime::Seconds() - StartTime));
+}
+//--[D5]
 
 void UHierarchicalInstancedStaticMeshComponent::GetInstanceTransforms(TArray<FMatrix>& InstanceTransforms, FVector const& Offset) const
 {
