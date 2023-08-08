@@ -342,7 +342,7 @@ void FLiteGPUSceneInstanceData::InitInstanceData(class ULiteGPUSceneComponent* C
 	}
 
 	// This stores AABB with BL-UR format
-	TArray<FVector4> FoliageAABBs;
+	TArray<FVector4f> FoliageAABBs;
 	FoliageAABBs.SetNum(2 * FoliageTypeNum);
 	for (int32 FoliageIndex = 0; FoliageIndex < FoliageTypeNum; FoliageIndex++)
 	{
@@ -352,18 +352,18 @@ void FLiteGPUSceneInstanceData::InitInstanceData(class ULiteGPUSceneComponent* C
 			FBox Box = MeshBound.GetBox();
 			FVector Min = Box.Min;
 			FVector Max = Box.Max;
-			FoliageAABBs[FoliageIndex * 2 + 0] = FVector4(Min.X, Min.Y, Min.Z, MeshBound.SphereRadius);
-			FoliageAABBs[FoliageIndex * 2 + 1] = FVector4(Max.X, Max.Y, Max.Z, 0);
+			FoliageAABBs[FoliageIndex * 2 + 0] = FVector4f(Min.X, Min.Y, Min.Z, MeshBound.SphereRadius);
+			FoliageAABBs[FoliageIndex * 2 + 1] = FVector4f(Max.X, Max.Y, Max.Z, 0);
 		}
 		else
 		{
-			FoliageAABBs[FoliageIndex * 2 + 0] = FVector4(-50.0f, -50.0f, -50.0f, 0);
-			FoliageAABBs[FoliageIndex * 2 + 1] = FVector4(50.0f, 50.0f, 50.0f, 0);
+			FoliageAABBs[FoliageIndex * 2 + 0] = FVector4f(-50.0f, -50.0f, -50.0f, 0);
+			FoliageAABBs[FoliageIndex * 2 + 1] = FVector4f(50.0f, 50.0f, 50.0f, 0);
 		}
 	}
 	// Copy that in
-	PatchAABBData.SetNum(2 * sizeof(FVector4) * FoliageTypeNum);
-	FMemory::Memcpy(PatchAABBData.GetData(), FoliageAABBs.GetData(), 2 * FoliageTypeNum * sizeof(FVector4));
+	PatchAABBData.SetNum(2 * sizeof(FVector4f) * FoliageTypeNum);
+	FMemory::Memcpy(PatchAABBData.GetData(), FoliageAABBs.GetData(), 2 * FoliageTypeNum * sizeof(FVector4f));
 
 
 	UploadInstanceScaleData.SetNum(MAX_BUFFER_ARRAY_NUM);
@@ -441,7 +441,7 @@ void FLiteGPUSceneInstanceData::UpdateIncreasedData(class ULiteGPUSceneComponent
 			const FMatrix& T = Key->LiteGPUSceneDatas[InstanceIndex + Key->IncreasedOffset].TransformsData;
 			for (int i = 0; i < 4; i++)
 			{
-				UploadInstanceTransformData[(InstanceIndex + LastInstancedIndicesNum) * 4 + i] = FVector4(T.M[i][0], T.M[i][1], T.M[i][2], T.M[i][3]);
+				UploadInstanceTransformData[(InstanceIndex + LastInstancedIndicesNum) * 4 + i] = FVector4f(T.M[i][0], T.M[i][1], T.M[i][2], T.M[i][3]);
 			}
 			UploadInstanceScaleData[InstanceIndex + LastInstancedIndicesNum] = Key->LiteGPUSceneDatas[InstanceIndex + Key->IncreasedOffset].Scale;
 			check(Key->LiteGPUSceneDatas[InstanceIndex + Key->IncreasedOffset].MeshIndex <= 255);
@@ -697,20 +697,20 @@ void FLiteGPUSceneInstanceData::Initialize_RenderingThread()
 	if (nullptr == AllPatchInfoBuffer)
 	{
 		AllPatchInfoBuffer = new FReadBuffer();
-		TResourceArray<FVector4, VERTEXBUFFER_ALIGNMENT> AllPatchInfoBufferArray;
+		TResourceArray<FVector4f, VERTEXBUFFER_ALIGNMENT> AllPatchInfoBufferArray;
 		AllPatchInfoBufferArray.SetNumUninitialized(AllPatchNum * 2);
 
 		for (int32 PatchIndex = 0; PatchIndex < AllPatchNum; PatchIndex++)
 		{
 			const FLiteGPUSceneMeshPatchInfo& PatchInfo = AllPatches[PatchIndex];
-			AllPatchInfoBufferArray[2 * PatchIndex + 0] = FVector4(PatchInfo.FirstIndexOffset, PatchInfo.IndexCount, PatchInfo.FirstVertexOffset, PatchInfo.VertexCount);
-			AllPatchInfoBufferArray[2 * PatchIndex + 1] = FVector4(PatchInfo.ScreenSizeMin, PatchInfo.ScreenSizeMax, PatchInfo.MeshIndex, PatchInfo.MaterialIndex);
+			AllPatchInfoBufferArray[2 * PatchIndex + 0] = FVector4f(PatchInfo.FirstIndexOffset, PatchInfo.IndexCount, PatchInfo.FirstVertexOffset, PatchInfo.VertexCount);
+			AllPatchInfoBufferArray[2 * PatchIndex + 1] = FVector4f(PatchInfo.ScreenSizeMin, PatchInfo.ScreenSizeMax, PatchInfo.MeshIndex, PatchInfo.MaterialIndex);
 		}
 
 		FRHIResourceCreateInfo CreateInfo(TEXT("PatchInfo-InstanceBuffer"), &AllPatchInfoBufferArray);
 		uint32 Size = AllPatchInfoBufferArray.GetResourceDataSize();
 		GPUByte += Size;
-		CreateInstanceBufferFromCreatInfo(sizeof(FVector4), 2 * AllPatchNum, PF_A32B32G32R32F, BUF_None, CreateInfo, *AllPatchInfoBuffer);
+		CreateInstanceBufferFromCreatInfo(sizeof(FVector4f), 2 * AllPatchNum, PF_A32B32G32R32F, BUF_None, CreateInfo, *AllPatchInfoBuffer);
 	}
 
 	if (nullptr == MeshAABBBuffer)
@@ -720,12 +720,12 @@ void FLiteGPUSceneInstanceData::Initialize_RenderingThread()
 		TResourceArray<FVector4f, VERTEXBUFFER_ALIGNMENT> AABBArray;
 		AABBArray.SetNumUninitialized(2 * FoliageTypeNum);
 
-		check(PatchAABBData.Num() == 2 * FoliageTypeNum * sizeof(FVector4));
-		FMemory::Memcpy(AABBArray.GetData(), PatchAABBData.GetData(), 2 * FoliageTypeNum * sizeof(FVector4));
+		check(PatchAABBData.Num() == 2 * FoliageTypeNum * sizeof(FVector4f));
+		FMemory::Memcpy(AABBArray.GetData(), PatchAABBData.GetData(), 2 * FoliageTypeNum * sizeof(FVector4f));
 		uint32 Size = AABBArray.GetResourceDataSize();
 		GPUByte += Size;
 		FRHIResourceCreateInfo CreateInfo(TEXT("AABB-InstanceBuffer"), &AABBArray);
-		CreateInstanceBufferFromCreatInfo(sizeof(FVector4), 2 * FoliageTypeNum, PF_A32B32G32R32F, BUF_Static, CreateInfo, *MeshAABBBuffer);
+		CreateInstanceBufferFromCreatInfo(sizeof(FVector4f), 2 * FoliageTypeNum, PF_A32B32G32R32F, BUF_Static, CreateInfo, *MeshAABBBuffer);
 	}
 
 	/*
@@ -743,8 +743,8 @@ void FLiteGPUSceneInstanceData::Initialize_RenderingThread()
 	if (RWInstanceScaleBuffer == nullptr)
 	{
 		RWInstanceScaleBuffer = new FRWBuffer();
-		RWInstanceScaleBuffer->Initialize(TEXT("RWInstanceScaleBuffer"), sizeof(FVector4), MAX_BUFFER_ARRAY_NUM, PF_A32B32G32R32F, BUF_None);
-		uint32 Size = sizeof(FVector4) * MAX_BUFFER_ARRAY_NUM;
+		RWInstanceScaleBuffer->Initialize(TEXT("RWInstanceScaleBuffer"), sizeof(FVector4f), MAX_BUFFER_ARRAY_NUM, PF_A32B32G32R32F, BUF_None);
+		uint32 Size = sizeof(FVector4f) * MAX_BUFFER_ARRAY_NUM;
 		GPUByte += Size;
 	}
 
@@ -760,9 +760,9 @@ void FLiteGPUSceneInstanceData::Initialize_RenderingThread()
 	if (RWInstanceTransformBuffer == nullptr)
 	{
 		RWInstanceTransformBuffer = new FRWBuffer();
-		RWInstanceTransformBuffer->Initialize(TEXT("RWInstanceTransformBuffer"), sizeof(FVector4), MAX_BUFFER_ARRAY_NUM * 4, PF_A32B32G32R32F, BUF_None);
+		RWInstanceTransformBuffer->Initialize(TEXT("RWInstanceTransformBuffer"), sizeof(FVector4f), MAX_BUFFER_ARRAY_NUM * 4, PF_A32B32G32R32F, BUF_None);
 
-		uint32 Size = sizeof(FVector4) * MAX_BUFFER_ARRAY_NUM * 4;
+		uint32 Size = sizeof(FVector4f) * MAX_BUFFER_ARRAY_NUM * 4;
 		GPUByte += Size;
 	}
 
@@ -1241,8 +1241,8 @@ void ULiteGPUSceneComponent::DrawDebugBoxLine()
 		for (int32 Index = 0; Index < SharedPerInstanceData->InstanceNum; Index++)
 		{
 
-			// 		FVector4 Center = (SharedPerInstanceData->UploadInstanceAABB[Index * 2] + SharedPerInstanceData->UploadInstanceAABB[Index * 2 + 1]) * 0.5;
-			// 		FVector4 Extend = (SharedPerInstanceData->UploadInstanceAABB[Index * 2 + 1] - SharedPerInstanceData->UploadInstanceAABB[Index * 2]) * 0.5;
+			// 		FVector4f Center = (SharedPerInstanceData->UploadInstanceAABB[Index * 2] + SharedPerInstanceData->UploadInstanceAABB[Index * 2 + 1]) * 0.5;
+			// 		FVector4f Extend = (SharedPerInstanceData->UploadInstanceAABB[Index * 2 + 1] - SharedPerInstanceData->UploadInstanceAABB[Index * 2]) * 0.5;
 			// 		int32 ColorIndex = SharedPerInstanceData->UploadInstanceFoliageTypeData[Index];
 			// 		DrawDebugBox(World, Center, Extend, FQuat::Identity, ColorArray[ColorIndex], false, 0.5f);
 		}
@@ -1526,7 +1526,6 @@ void ULiteGPUSceneComponent::CleanupInstances()
 	RemovedHISMs.Empty();
 	IncreasedHISMs.Empty();
 	ENQUEUE_RENDER_COMMAND(CleanupLiteGPUSceneComponentData)(
-
 		[CleanupDataPtr, CleanupVertexIndexBufferPtr, CleanupVisibilityDataPtr](FRHICommandList& RHICmdList)
 		{
 			if (CleanupDataPtr)
@@ -1999,7 +1998,7 @@ void FLiteGPUSceneProxy::PostUpdateBeforePresent(const TArray<const FSceneView*>
 	{
 		return;
 	}
-	LastFrameViewForward = View->GetViewDirection();
+	LastFrameViewForward = FVector3f(View->GetViewDirection());
 }
 
 void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector) const

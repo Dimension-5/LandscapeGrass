@@ -3044,12 +3044,7 @@ void UHierarchicalInstancedStaticMeshComponent::ApplyBuildTree(FClusterBuilder& 
 }
 
 bool UHierarchicalInstancedStaticMeshComponent::BuildTreeIfOutdated(bool Async, bool ForceUpdate)
-{
-	// ++[D5] 
-	if (bUseLiteGPUScene)
-		return true;
-	// --[D5]
-	
+{	
 	// The tree will be fully rebuilt once the static mesh compilation is finished.
 	if (HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject) || (GetStaticMesh() && GetStaticMesh()->IsCompiling()))
 	{
@@ -3078,6 +3073,14 @@ bool UHierarchicalInstancedStaticMeshComponent::BuildTreeIfOutdated(bool Async, 
 			bIsOutOfDate = true;
 
 			GetStaticMesh()->ConditionalPostLoad();
+
+			// ++[D5] 
+			if (bUseLiteGPUScene)
+			{
+				bIsOutOfDate = false;
+				return true;
+			}
+			// --[D5]
 
 			// Trying to do async processing on the begin play does not work, as this will be dirty but not ready for rendering
 			const bool bForceSync = (NumBuiltInstances == 0 && GetWorld() && !GetWorld()->HasBegunPlay());

@@ -224,9 +224,12 @@ FMaterialVertexParameters GetMaterialVertexParameters(FVertexFactoryInput Input,
 	// does not handle instancing!
 	Result.TangentToWorld = Intermediates.TangentToWorld;
 
+	FPrimitiveSceneData PrimitiveData = GetPrimitiveData(Intermediates);
+
 	// As the transform passed in is already global world transform
 	// There's no need to multiple by the primitve's transform
-	Result.InstanceLocalToWorld = GetInstanceTransform(Intermediates);
+	float4x4 InstanceToLocal = GetInstanceTransform(Intermediates);
+	Result.InstanceLocalToWorld = LWCMultiply(InstanceToLocal, PrimitiveData.LocalToWorld);
 	Result.InstanceLocalPosition = Input.Position.xyz;
 	Result.PerInstanceParams = Intermediates.PerInstanceParams;
 
@@ -248,11 +251,10 @@ float4 CalcWorldPosition(float4 Position, float4x4 InstanceTransform, uint Primi
 float4 CalcWorldPosition(float4 Position, uint PrimitiveId)
 #endif	// USE_INSTANCING
 {
-
 	float3 WorldPosition = mul(Position, InstanceTransform).xyz;
 
 #if USE_INSTANCING
-	return float4(WorldPosition.xyz + ResolvedView.PreViewTranslation.xyz, 1.0);
+	return float4(WorldPosition.xyz + LWCHackToFloat(ResolvedView.PreViewTranslation).xyz, 1.0);
 #else
 	return TransformLocalToTranslatedWorld(Position.xyz, PrimitiveId);
 #endif
@@ -461,7 +463,7 @@ float4 VertexFactoryGetInstanceHitProxyId(FVertexFactoryInput Input, FVertexFact
 float4 VertexFactoryGetTranslatedPrimitiveVolumeBounds(FVertexFactoryInterpolantsVSToPS Interpolants)
 {
 	float4 ObjectWorldPositionAndRadius = GetPrimitiveData(GetPrimitiveId(Interpolants)).ObjectWorldPositionAndRadius;
-	return float4(ObjectWorldPositionAndRadius.xyz + ResolvedView.PreViewTranslation.xyz, ObjectWorldPositionAndRadius.w);
+	return float4(ObjectWorldPositionAndRadius.xyz + LWCHackToFloat(ResolvedView.PreViewTranslation).xyz, ObjectWorldPositionAndRadius.w);
 }
 uint VertexFactoryGetPrimitiveId(FVertexFactoryInterpolantsVSToPS Interpolants)
 {

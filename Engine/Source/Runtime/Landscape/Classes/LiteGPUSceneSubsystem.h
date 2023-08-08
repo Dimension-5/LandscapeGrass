@@ -3,6 +3,7 @@
 #include "Subsystems/EngineSubsystem.h"
 #include "LiteGPUSceneSubsystem.generated.h"
 
+class ULiteGPUSceneComponent;
 class UHierarchicalInstancedStaticMeshComponent;
 using HISMComponent = UHierarchicalInstancedStaticMeshComponent;
 using HISMArray = TArray<HISMComponent*>;
@@ -32,6 +33,8 @@ public:
 
 	void BuildLiteGPUScene();
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ALiteGPUSceneManager")
+	TObjectPtr<ULiteGPUSceneComponent> LiteGPUSceneComp;
 private:
 	virtual void PreRegisterAllComponents() override;
 	virtual void UnregisterAllComponents(bool bForReregister = false) override;

@@ -78,7 +78,7 @@ void FLiteGPUSceneBufferManager::UpdateUploader(FRHICommandList& RHICmdList, cla
 				int32 IndexDirty = InDirtyBuffer[Index];
 				int32 InstanceUploadOffset = IndexDirty * 4;
 				check(InstanceDataPtr->UploadInstanceTransformData.Num() >= InstanceUploadOffset + 4);
-				FVector4* addressA = InstanceDataPtr->UploadInstanceTransformData.GetData() + InstanceUploadOffset;
+				FVector4f* addressA = InstanceDataPtr->UploadInstanceTransformData.GetData() + InstanceUploadOffset;
 				RWInstanceTransformBufferUploader->Add(InstanceUploadOffset, (void*)addressA, 4);
 			}
 
@@ -106,7 +106,7 @@ void FLiteGPUSceneBufferManager::UpdateUploader(FRHICommandList& RHICmdList, cla
 				int32 IndexDirty = InDirtyBuffer[Index];
 				int32 InstanceUploadOffset = IndexDirty;
 				check(InstanceDataPtr->UploadInstanceScaleData.Num() >= InstanceUploadOffset + 1);
-				FVector4* addressA = InstanceDataPtr->UploadInstanceScaleData.GetData() + InstanceUploadOffset;
+				FVector4f* addressA = InstanceDataPtr->UploadInstanceScaleData.GetData() + InstanceUploadOffset;
 				RWInstanceScaleBufferUploader->Add(InstanceUploadOffset, (void*)addressA, 1);
 			}
 

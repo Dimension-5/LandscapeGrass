@@ -34,12 +34,12 @@ public:
 	{
 		TransformsData = FMatrix::Identity;
 		MeshIndex = INDEX_NONE;
-		Scale = FVector::OneVector;
+		Scale = FVector3f::OneVector;
 	};
 public:
 	FMatrix				TransformsData;
 	int32				MeshIndex;
-	FVector				Scale;
+	FVector3f				Scale;
 
 	inline bool operator==(const FInstancedLiteGPUSceneData& Data) const
 	{
@@ -237,10 +237,10 @@ public:
 	struct FRWBuffer* RWGPUUnCulledInstanceIndirectParameters;
 
 	FConvexVolume ViewFrustum;
-	FVector ViewLocation;
-	FVector ViewForward;
-	FMatrix ProjMatrix;
-	FSphere ShadowBounds;
+	FVector3f ViewLocation;
+	FVector3f ViewForward;
+	FMatrix44f ProjMatrix;
+	FSphere3f ShadowBounds;
 
 	int32 MaxGPUInstanceToDraw;
 
@@ -327,8 +327,8 @@ public:
 	FRWBuffer* RWInstancePatchNumBuffer;
 	FRWBuffer* RWInstancePatchIDsBuffer;
 
-	TArray<FVector4> UploadInstanceScaleData;
-	TArray<FVector4> UploadInstanceTransformData;
+	TArray<FVector4f> UploadInstanceScaleData;
+	TArray<FVector4f> UploadInstanceTransformData;
 	TArray<uint8>  UploadInstanceFoliageTypeData;
 	/*
 	 * Array which  stores the AAbb data of the foliages,
@@ -600,7 +600,7 @@ public:
 	ERHIFeatureLevel::Type ProxyFeatureLevel;
 	FLiteGPUSceneProxyVisibilityDataPtr SharedMainVisibilityData;
 
-	FVector LastFrameViewForward;
+	FVector3f LastFrameViewForward;
 
 	FLiteGPUSceneVertexFactory* pGPUDrivenVertexFactory;
 
