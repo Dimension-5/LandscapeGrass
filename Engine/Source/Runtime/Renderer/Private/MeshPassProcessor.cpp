@@ -1030,6 +1030,9 @@ void FMeshDrawCommand::SetDrawParametersAndFinalize(
 	FirstIndex = BatchElement.FirstIndex;
 	NumPrimitives = BatchElement.NumPrimitives;
 	NumInstances = BatchElement.NumInstances;
+	//++[D5]
+	FirstInstance = BatchElement.FirstInstance;
+	//--[D5]
 
 	// If the mesh batch has a valid dynamic index buffer, use it instead
 	if (BatchElement.DynamicIndexBuffer.IsValid())
@@ -1045,12 +1048,25 @@ void FMeshDrawCommand::SetDrawParametersAndFinalize(
 		VertexParams.BaseVertexIndex = BatchElement.BaseVertexIndex;
 		VertexParams.NumVertices = BatchElement.MaxVertexIndex - BatchElement.MinVertexIndex + 1;
 		checkf(!BatchElement.IndirectArgsBuffer, TEXT("FMeshBatchElement::NumPrimitives must be set to 0 when a IndirectArgsBuffer is used"));
+		//++[D5]
+		IndirectArgs.Offset = 0;
+		IndirectDrawCount = 0;
+		IndirectArgs.Stride = 0;
+		IndirectArgs.CounterOffset = 0;
+		IndirectArgs.CounterBuffer = NULL;
+		//--[D5]
 	}
 	else
 	{
 		checkf(BatchElement.IndirectArgsBuffer, TEXT("It is only valid to set BatchElement.NumPrimitives == 0 when a IndirectArgsBuffer is used"));
 		IndirectArgs.Buffer = BatchElement.IndirectArgsBuffer;
 		IndirectArgs.Offset = BatchElement.IndirectArgsOffset;
+		//++[D5]
+		IndirectDrawCount = BatchElement.IndirectDrawCount;
+		IndirectArgs.Stride = BatchElement.IndirectBufferStride;
+		IndirectArgs.CounterBuffer = BatchElement.IndirectCounterBuffer;
+		IndirectArgs.CounterOffset = BatchElement.IndirectCounterOffset;
+		//--[D5]
 	}
 
 	Finalize(PipelineId, ShadersForDebugging);
@@ -1423,11 +1439,34 @@ void FMeshDrawCommand::SubmitDrawEnd(const FMeshDrawCommand& MeshDrawCommand, ui
 		}
 		else
 		{
+			//++[D5]
+			if (MeshDrawCommand.IndirectDrawCount > 1)
+			{
+				RHICmdList.MultiDrawIndexedPrimitiveIndirect(
+					MeshDrawCommand.IndexBuffer, // IB
+					MeshDrawCommand.IndirectArgs.Buffer, // AB
+					MeshDrawCommand.IndirectArgs.Offset, // AB OFFSET
+					MeshDrawCommand.IndirectArgs.CounterBuffer, // CB
+					MeshDrawCommand.IndirectArgs.CounterOffset, // CB OFFSET
+					MeshDrawCommand.IndirectDrawCount // DRAW COUNT
+				);
+			}
+			else
+			{
+				RHICmdList.DrawIndexedPrimitiveIndirect(
+					MeshDrawCommand.IndexBuffer,
+					MeshDrawCommand.IndirectArgs.Buffer,
+					MeshDrawCommand.IndirectArgs.Offset
+				);
+			}
+			//--[D5]
+			/*
 			RHICmdList.DrawIndexedPrimitiveIndirect(
 				MeshDrawCommand.IndexBuffer,
 				bDoOverrideArgs ? IndirectArgsOverrideBuffer : MeshDrawCommand.IndirectArgs.Buffer,
 				bDoOverrideArgs ? IndirectArgsOverrideByteOffset : MeshDrawCommand.IndirectArgs.Offset
 			);
+			*/
 		}
 	}
 	else

@@ -653,7 +653,80 @@ namespace Detail
 		, class FLiteGPUSceneProxy* CullingProxy
 		, class FLiteGPUSceneProxyVisibilityData* ResVisibilityData)
 	{
+		FLiteGPUSceneInstanceDataPtr SharedInstanceData = CullingProxy->SharedPerInstanceData;
+		// The number of instances that are waiting for culling
+		// This will be initialized to all, once all the data are uploaded
+		if (SharedInstanceData->CullingInstancedNum <= 0)
+		{
+			return;
+		}
 
+		const auto& SM = GetGlobalShaderMap(CullingProxy->ProxyFeatureLevel);
+		SCOPED_DRAW_EVENT(RHICmdList, GPUCullingPhase);
+		{
+			SCOPED_DRAW_EVENT(RHICmdList, ClearLiteGPUSceneResCS);
+
+			const FRHITransitionInfo ComputeToComputeUAVs[] =
+			{
+				//resources to write
+	#if ENABLE_LITE_GPU_SCENE_DEBUG
+				FRHITransitionInfo(ResVisibilityData->RWGPUCulledInstanceBuffer[UniqueID]->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+				FRHITransitionInfo(ResVisibilityData->RWGPUCulledInstanceDebugIndirectParameters->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+	#endif
+				FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+				FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceScreenSize->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+				FRHITransitionInfo(ResVisibilityData->RWDepthDrawTestResultBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+				FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceNum->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+				FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceIndirectParameters->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute)
+			};
+			RHICmdList.Transition(MakeArrayView(ComputeToComputeUAVs, UE_ARRAY_COUNT(ComputeToComputeUAVs)));
+			FClearLiteGPUSceneResCS::FPermutationDomain PermutationVector;
+			PermutationVector.Set<FClearLiteGPUSceneResCS::FEnableDepthDrawTest>(sLiteGPUSceneEnableDepthDrawTest > 0);
+			TShaderMapRef<FClearLiteGPUSceneResCS> ClearCS(SM, PermutationVector);
+			SetComputePipelineState(RHICmdList, ClearCS.GetComputeShader());
+			ClearCS->SetParameters(RHICmdList, SharedInstanceData.Get(), ResVisibilityData);
+			DispatchComputeShader(RHICmdList, ClearCS.GetShader(),
+				FMath::DivideAndRoundUp<uint32>(SharedInstanceData->CullingInstancedNum,
+					LITE_GPU_SCENE_COMPUTE_THREAD_NUM), 1, 1);
+			ClearCS->UnbindBuffers(RHICmdList);
+		}
+
+		{
+			SCOPED_DRAW_EVENT(RHICmdList, GPUCullingInstanceCS);
+			const FRHITransitionInfo ComputeToComputeUAVs[] =
+			{
+				//Resources to read
+				FRHITransitionInfo(SharedInstanceData->RWInstanceTypeBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+				FRHITransitionInfo(SharedInstanceData->RWInstanceTransformBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+
+				//Resources to write
+				FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceScreenSize->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+				FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceIndirectParameters->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+				FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceNum->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+				FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+	#if ENABLE_LITE_GPU_SCENE_DEBUG
+				FRHITransitionInfo(ResVisibilityData->RWGPUCulledInstanceBuffer[UniqueID]->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+				FRHITransitionInfo(ResVisibilityData->RWGPUCulledInstanceDebugIndirectParameters->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute)
+	#endif
+			};
+			RHICmdList.Transition(MakeArrayView(ComputeToComputeUAVs, UE_ARRAY_COUNT(ComputeToComputeUAVs)));
+
+			FLiteGPUSceneCullingCS::FPermutationDomain PermutationVector;
+			const bool bUseWaveOps = GRHISupportsWaveOperations && GRHIMinimumWaveSize >= 32 &&
+				GLiteGPUSceneCullingUseWaveOps;
+			PermutationVector.Set<FLiteGPUSceneCullingCS::FWaveOps>(bUseWaveOps);
+			PermutationVector.Set<FLiteGPUSceneCullingCS::FEnableDepthDrawTest>(sLiteGPUSceneEnableDepthDrawTest > 0);
+			TShaderMapRef<FLiteGPUSceneCullingCS> CullingCS(SM, PermutationVector);
+			SetComputePipelineState(RHICmdList, CullingCS.GetComputeShader());
+			CullingCS->SetParameters(RHICmdList, View, SharedInstanceData.Get(), ResVisibilityData);
+
+			DispatchComputeShader(RHICmdList, CullingCS.GetShader(),
+				FMath::DivideAndRoundUp<uint32>(SharedInstanceData->InstanceNum,
+					LITE_GPU_SCENE_COMPUTE_THREAD_NUM), 1, 1);
+
+			CullingCS->UnbindBuffers(RHICmdList);
+		}
+		ResVisibilityData->bFirstGPUCullinged = true;
 	}	
 	
 	void DepthDrawTest(FRHICommandList& RHICmdList
@@ -689,7 +762,7 @@ void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View
 
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("LiteGPUScene::Culling"),
-		ERDGPassFlags::None | ERDGPassFlags::NeverCull,
+		ERDGPassFlags::NeverParallel,
 		[&View](FRHICommandList& RHICmdList)
 		{
 			const FSceneViewFamily& ViewFamily = *(View.Family);

@@ -694,11 +694,12 @@ void FLiteGPUSceneProxy::GenerateIndirectDrawBuffer(const FSceneView* View, cons
 	FLiteGPUSceneInstanceData* PerInstanceData) const
 {
 	SCOPE_CYCLE_COUNTER(STAT_GenerateIndirecDrawBuffer);
-
+	
 	if (!ResVisibilityData->bGPUCulling || !ResVisibilityData->bFirstGPUCullinged)
 	{
 		return;
 	}
+	
 	FRHICommandListImmediate& RHICmdList = GRHICommandList.GetImmediateCommandList();
 	RHICmdList.Transition(FRHITransitionInfo(SharedMainVisibilityData->RWInstanceIndiceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute));
 	SCOPED_DRAW_EVENT(RHICmdList, GenerateIndirectDrawBufferPhase);

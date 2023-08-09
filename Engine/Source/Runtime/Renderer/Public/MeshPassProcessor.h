@@ -1062,8 +1062,18 @@ public:
 		{
 			FRHIBuffer* Buffer;
 			uint32 Offset;
+			//++[D5]
+			uint32 Stride;
+			uint32 CounterOffset;
+			FRHIBuffer* CounterBuffer;
+			//--[D5]
 		} IndirectArgs;
 	};
+
+	//++[D5]
+	uint32 FirstInstance;
+	uint32 IndirectDrawCount;
+	//--[D5]
 
 	int8 PrimitiveIdStreamIndex;
 

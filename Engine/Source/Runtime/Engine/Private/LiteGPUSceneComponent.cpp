@@ -929,7 +929,6 @@ void FLiteGPUSceneProxyVisibilityData::InitVisibilityData(int32 InPatchNum, bool
 			}
 		}
 	);
-
 	bInitialized = true;
 }
 
@@ -1945,15 +1944,15 @@ void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View
 		BatchElement.bUserDataIsColorVertexBuffer = false;
 		BatchElement.InstancedLODIndex = 0;
 		BatchElement.UserIndex = 0;
-
-		// BatchElement.FirstInstance = 0;
 		BatchElement.NumInstances = 1;
 
 		BatchElement.IndirectArgsBuffer = SharedMainVisibilityData->RWIndirectDrawBuffer->Buffer;
 		BatchElement.IndirectArgsOffset = IndirectDrawOffset * sizeof(LiteGPUSceneIndirectArguments);
 
-		// BatchElement.IndirectDrawCount = PatchIndices.Num();
-		// BatchElement.IndirectBufferStride = sizeof(LiteGPUSceneIndirectArguments);
+		BatchElement.FirstInstance = 0;
+		BatchElement.IndirectDrawCount = PatchIndices.Num();
+		BatchElement.IndirectBufferStride = sizeof(LiteGPUSceneIndirectArguments);
+
 		IndirectDrawOffset += PatchIndices.Num();
 		Collector.AddMesh(ViewIndex, Mesh);
 	}
