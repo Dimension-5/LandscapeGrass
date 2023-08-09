@@ -3052,6 +3052,13 @@ bool UHierarchicalInstancedStaticMeshComponent::BuildTreeIfOutdated(bool Async, 
 
 	TRACE_CPUPROFILER_EVENT_SCOPE(UHierarchicalInstancedStaticMeshComponent::BuildTreeIfOutdated);
 
+	// ++[D5] 
+	if (bUseLiteGPUScene)
+	{
+		return true;
+	}
+	// --[D5]
+
 	if (ForceUpdate 
 		|| bIsOutOfDate
 		|| InstanceUpdateCmdBuffer.NumTotalCommands() != 0
@@ -3072,17 +3079,6 @@ bool UHierarchicalInstancedStaticMeshComponent::BuildTreeIfOutdated(bool Async, 
 			bIsOutOfDate = true;
 
 			GetStaticMesh()->ConditionalPostLoad();
-
-			// ++[D5] 
-			if (bUseLiteGPUScene)
-			{
-				TranslatedInstanceSpaceOrigin = CalcTranslatedInstanceSpaceOrigin();
-				InitializeInstancingRandomSeed();
-				GetInstanceTransforms(LiteGPUSceneDatas, -TranslatedInstanceSpaceOrigin);
-				bIsOutOfDate = false;
-				return true;
-			}
-			// --[D5]
 
 			// Trying to do async processing on the begin play does not work, as this will be dirty but not ready for rendering
 			const bool bForceSync = (NumBuiltInstances == 0 && GetWorld() && !GetWorld()->HasBegunPlay());
@@ -3134,6 +3130,16 @@ void UHierarchicalInstancedStaticMeshComponent::GetInstanceTransforms(TArray<FIn
 	}
 
 	UE_LOG(LogStaticMesh, Verbose, TEXT("Copied %d transforms in %.3fs."), Num, float(FPlatformTime::Seconds() - StartTime));
+}
+
+void UHierarchicalInstancedStaticMeshComponent::UpdateLiteGPUSceneTransforms()
+{
+	if (bUseLiteGPUScene)
+	{
+		TranslatedInstanceSpaceOrigin = CalcTranslatedInstanceSpaceOrigin();
+		InitializeInstancingRandomSeed();
+		GetInstanceTransforms(LiteGPUSceneDatas, -TranslatedInstanceSpaceOrigin);
+	}
 }
 //--[D5]
 

@@ -405,12 +405,13 @@ private:
 	// Temp Interface
 	TArray<FCollisionNotifyInfo> MNotifies;
 
+public:
 	// Maps PhysicsProxy to Component that created the PhysicsProxy
 	TMap<IPhysicsProxyBase*, TObjectPtr<UPrimitiveComponent>> PhysicsProxyToComponentMap;
-
 	// Maps Component to PhysicsProxy that is created
 	TMap<UPrimitiveComponent*, TArray<IPhysicsProxyBase*>> ComponentToPhysicsProxyMap;
 
+private:
 	//TSet<UActorComponent*> FixedTickComponents;
 	//TSet<AActor*> FixedTickActors;
 

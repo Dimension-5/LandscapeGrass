@@ -644,8 +644,6 @@ protected:
 
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /* = false */) const override;
 
-	UFUNCTION(CallInEditor, Category="LandscapeComponent")
-	void DrawDebugBoxLine();
 	UFUNCTION(CallInEditor, Category = "LandscapeComponent")
 	void CheckData();
 

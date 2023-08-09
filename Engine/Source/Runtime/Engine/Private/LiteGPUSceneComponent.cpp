@@ -49,11 +49,11 @@ static FAutoConsoleVariableRef CVarDrawLiteGPUScene(
 	ECVF_Scalability
 );
 
-#define ONEFRAME_UPDATE_INSTANCE_NUM 4096
+#define ONEFRAME_UPDATE_INSTANCE_NUM 1024 * 256
 #define ONEFRAME_REMOVE_INSTANCE_NUM 256
 #define ONEFRAME_UPDATE_GROUP_NUM 2
 #define MAX_DIRTY_BUFFER_NUM ((ONEFRAME_UPDATE_INSTANCE_NUM  + ONEFRAME_REMOVE_INSTANCE_NUM) * ONEFRAME_UPDATE_GROUP_NUM)
-#define MAX_BUFFER_ARRAY_NUM 1024 * 1024 * 16
+#define MAX_BUFFER_ARRAY_NUM 1024 * 1024 * 32
 
 FLiteGPUSceneMeshPatchInfo::FLiteGPUSceneMeshPatchInfo()
 	:MeshIndex(0)
@@ -400,9 +400,7 @@ void FLiteGPUSceneInstanceData::UpdateIncreasedData(class ULiteGPUSceneComponent
 	SCOPE_CYCLE_COUNTER(STAT_UpdateIncreaseData);
 
 	if (!bInitialized)
-	{
 		return;
-	}
 
 	PerPatchMaxNum = Comp->PerPatchMaxNum;
 	if (AllPatchNum <= 0 || PerPatchMaxNum <= 0)
@@ -476,7 +474,6 @@ void FLiteGPUSceneInstanceData::UpdateIncreasedData(class ULiteGPUSceneComponent
 #endif
 			}
 		}
-
 
 		// Find patch that share the same mesh with the new instance 
 		int32 PatchIndex = 0;
@@ -618,19 +615,14 @@ void FLiteGPUSceneInstanceData::UpdateInstanceData(ULiteGPUSceneComponent* Comp)
 #if !PLATFORM_WINDOWS
 	FrameData& CurrentFrameData = FrameBufferedData[FrameBufferSelectionCounter];
 #endif
-
+	if (!bInitialized)
+		return;
 #if PLATFORM_WINDOWS
 	if (!bUpdateFrame)
 #else
 	if (!CurrentFrameData.bUpdateFrame)
 #endif
-	{
 		return;
-	}
-	if (!bInitialized)
-	{
-		return;
-	}
 
 	AllInstanceIndexNum = 0;
 	for (int32 PatchIndex = 0; PatchIndex < PatchInstanceNum.Num(); PatchIndex++)
@@ -817,7 +809,6 @@ void FLiteGPUSceneInstanceData::Initialize_RenderingThread()
 
 void FLiteGPUSceneInstanceData::Release_RenderingThread()
 {
-
 	if (AllPatchInfoBuffer)
 	{
 		AllPatchInfoBuffer->Release();
@@ -837,35 +828,30 @@ void FLiteGPUSceneInstanceData::Release_RenderingThread()
 		RWDrawedTriangleCountBufferAsyncReadBack = nullptr;
 	}
 #endif
-
 	if (RWPatchCountBuffer)
 	{
 		RWPatchCountBuffer->Release();
 		delete RWPatchCountBuffer;
 		RWPatchCountBuffer = nullptr;
 	}
-
 	if (RWPatchCountCopyBuffer)
 	{
 		RWPatchCountCopyBuffer->Release();
 		delete RWPatchCountCopyBuffer;
 		RWPatchCountCopyBuffer = nullptr;
 	}
-
 	if (RWPatchCountOffsetBuffer)
 	{
 		RWPatchCountOffsetBuffer->Release();
 		delete RWPatchCountOffsetBuffer;
 		RWPatchCountOffsetBuffer = nullptr;
 	}
-
 	if (RWNextPatchCountOffsetBuffer)
 	{
 		RWNextPatchCountOffsetBuffer->Release();
 		delete RWNextPatchCountOffsetBuffer;
 		RWNextPatchCountOffsetBuffer = nullptr;
 	}
-
 	if (RWGPUInstanceIndicesBuffer)
 	{
 		RWGPUInstanceIndicesBuffer->Release();
@@ -913,15 +899,12 @@ void FLiteGPUSceneInstanceData::Release_RenderingThread()
 	UploadInstanceFoliageTypeData.Empty();
 	UploadInstancePatchNum.Empty();
 	UploadInstancePatchIDs.Empty();
-
 }
 
 void FLiteGPUSceneProxyVisibilityData::InitVisibilityData(int32 InPatchNum, bool bInGPUCulling, int32 InPerMatchMaxIndexNum)
 {
 	if (InPatchNum == 0)
-	{
 		return;
-	}
 
 	GPUByte = 0;
 	PerPatchMaxNum = InPerMatchMaxIndexNum;
@@ -1126,7 +1109,6 @@ ULiteGPUSceneComponent::ULiteGPUSceneComponent()
 	MaxInstanceNum = 0;
 }
 
-
 // Called when the game starts
 void ULiteGPUSceneComponent::BeginPlay()
 {
@@ -1185,42 +1167,6 @@ void ULiteGPUSceneComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMa
 	}
 }
 
-void ULiteGPUSceneComponent::DrawDebugBoxLine()
-{	// Left for Debugging
-#if (!UE_BUILD_SHIPPING && !UE_BUILD_TEST)
-	{
-		UWorld* World = GetWorld();
-		TArray<FColor> ColorArray;
-		ColorArray.Add(FColor::Red);
-		ColorArray.Add(FColor::Yellow);
-		ColorArray.Add(FColor::Green);
-		ColorArray.Add(FColor::Orange);
-		ColorArray.Add(FColor::Purple);
-		ColorArray.Add(FColor::Cyan);
-		ColorArray.Add(FColor::Orange);
-		ColorArray.Add(FColor::Magenta);
-		ColorArray.Add(FColor::Silver);
-		ColorArray.Add(FColor::White);
-		ColorArray.Add(FColor::Blue);
-		ColorArray.Add(FColor::Black);
-		ColorArray.Add(FColor::Black);
-		ColorArray.Add(FColor::Black);
-		ColorArray.Add(FColor::Black);
-
-
-		for (int32 Index = 0; Index < SharedPerInstanceData->InstanceNum; Index++)
-		{
-
-			// 		FVector4f Center = (SharedPerInstanceData->UploadInstanceAABB[Index * 2] + SharedPerInstanceData->UploadInstanceAABB[Index * 2 + 1]) * 0.5;
-			// 		FVector4f Extend = (SharedPerInstanceData->UploadInstanceAABB[Index * 2 + 1] - SharedPerInstanceData->UploadInstanceAABB[Index * 2]) * 0.5;
-			// 		int32 ColorIndex = SharedPerInstanceData->UploadInstanceFoliageTypeData[Index];
-			// 		DrawDebugBox(World, Center, Extend, FQuat::Identity, ColorArray[ColorIndex], false, 0.5f);
-		}
-	}
-#endif
-
-}
-
 void ULiteGPUSceneComponent::CheckData()
 {
 
@@ -1236,9 +1182,7 @@ FBoxSphereBounds ULiteGPUSceneComponent::CalcBounds(const FTransform& LocalToWor
 // Called every frame
 void ULiteGPUSceneComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
-
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
 }
 
 
@@ -1399,34 +1343,34 @@ void ULiteGPUSceneComponent::UpdateIncreasedGroup()
 	{
 		UE_LOG(LogLiteGPUScene, Log, TEXT(" InstanceNum : %d"), AllInstanceNum);
 		UE_LOG(LogLiteGPUScene, Log, TEXT("Cur  InstanceNum : %d"), CurInstanceNum);
-		UWorld* World = GetWorld();
-
-		FlushPersistentDebugLines(World);
-
-		for (int32 ViewIndex = 0; ViewIndex < World->ViewLocationsRenderedLastFrame.Num(); ViewIndex++)
+		if (false)
 		{
-			for (int32 Index = 0; Index < MAX_BUFFER_ARRAY_NUM; Index++)
+			UWorld* World = GetWorld();
+			FlushPersistentDebugLines(World);
+			for (int32 ViewIndex = 0; ViewIndex < World->ViewLocationsRenderedLastFrame.Num(); ViewIndex++)
 			{
-				FMatrix T = FMatrix::Identity;
-				for (int i = 0; i < 4; i++)
+				for (int32 Index = 0; Index < CurInstanceNum; Index++)
 				{
-					for (int j = 0; j < 4; j++)
+					FMatrix T = FMatrix::Identity;
+					for (int i = 0; i < 4; i++)
 					{
-						T.M[i][j] = SharedPerInstanceData->UploadInstanceTransformData[4 * Index + i][j];
+						for (int j = 0; j < 4; j++)
+						{
+							T.M[i][j] = SharedPerInstanceData->UploadInstanceTransformData[4 * Index + i][j];
+						}
 					}
-				}
-				FVector ViewLocation = World->ViewLocationsRenderedLastFrame[ViewIndex];
-				FVector InstanceLocation = FVector(T.M[3][0], T.M[3][1], T.M[3][2]);
+					FVector ViewLocation = World->ViewLocationsRenderedLastFrame[ViewIndex];
+					FVector InstanceLocation = FVector(T.M[3][0], T.M[3][1], T.M[3][2]);
 
-				if (FVector::DistSquared(ViewLocation, InstanceLocation) < 10000000.0f)
-				{
-					uint8 MeshIndex = SharedPerInstanceData->UploadInstanceFoliageTypeData[Index];
-					FBoxSphereBounds Bound = AllSourceMeshes[MeshIndex]->GetBounds();
-
-					FBoxSphereBounds NewBound = Bound.TransformBy(T);
-					FVector Center = NewBound.GetBox().GetCenter();
-					FVector Extent = NewBound.GetBox().GetExtent();
-					DrawDebugBox(World, Center, Extent, FQuat::Identity, FColor::Red, false, 0.5f);
+					if (FVector::DistSquared(ViewLocation, InstanceLocation) < 1000000.0f)
+					{
+						const uint8 MeshIndex = SharedPerInstanceData->UploadInstanceFoliageTypeData[Index];
+						const FBoxSphereBounds Bound = AllSourceMeshes[MeshIndex]->GetBounds();
+						const FBoxSphereBounds NewBound = Bound.TransformBy(T);
+						const FVector Center = NewBound.GetBox().GetCenter();
+						const FVector Extent = NewBound.GetBox().GetExtent();
+						DrawDebugBox(World, Center, Extent, FQuat::Identity, FColor::Red, false, 0.5f);
+					}
 				}
 			}
 		}
@@ -1849,7 +1793,6 @@ FLiteGPUSceneProxy::FLiteGPUSceneProxy(ULiteGPUSceneComponent* Component, ERHIFe
 			SceneInterface->AddOrRemoveLiteGPUSceneProxy_RenderingThread(pLiteGPUSceneProxy, true);
 		}
 	);
-
 	BeginInitResource(pGPUDrivenVertexFactory);
 
 #if !UE_BUILD_SHIPPING
@@ -1862,12 +1805,9 @@ FLiteGPUSceneProxy::~FLiteGPUSceneProxy()
 	if (IsInRenderingThread())
 	{
 		SharedPerInstanceData.Reset();
-
 		SharedVertexIndexBufferData.Reset();
-
 		if (CachedSceneInterface)
 		{
-			// TODO
 			CachedSceneInterface->AddOrRemoveLiteGPUSceneProxy_RenderingThread(this, false);
 		}
 

@@ -1,0 +1,497 @@
+#include "Common.ush"
+
+float4 Float3VectorTransform(float3 vec, float4x4 mtx)
+{
+	return vec.x * mtx[0] + (vec.y * mtx[1] + (vec.z * mtx[2] + mtx[3]));
+}
+
+Buffer<float4> RWInstanceTransformBuffer;
+Buffer<uint> RWInstanceTypeBuffer;
+Buffer<float4> AABBPatchBuffer;
+
+uint NumInstances;
+
+float LiteGPUSceneMinScreenSize;
+float4 PreviewTranslation;
+float4x4 TranslatedViewProjectionMatrix;
+float4x4 ProjMatrix;
+float3 ViewLocation;
+float4x4 FrustumPermutedPlanes0;
+float4x4 FrustumPermutedPlanes1;
+
+RWBuffer<int> RWUnCulledInstanceBuffer;
+RWBuffer<float> RWGPUUnCulledInstanceScreenSize;
+
+RWBuffer<uint> RWGPUUnCulledInstanceNum;
+// For DepthDraw Test
+#ifndef ENABLE_DEPTHDRAWTEST
+#define  ENABLE_DEPTHDRAWTEST 0
+#endif 
+
+RWBuffer<int> RWDepthDrawTestResultBuffer;
+RWBuffer<int> RWDepthDrawTestResultTempBuffer;
+
+RWBuffer<uint> RWGPUUnCulledInstanceIndirectParameters;
+
+#define THREAD_COUNT 512
+
+#ifndef DIM_WAVE_OPS
+	#define  DIM_WAVE_OPS 0
+#endif
+
+float4 HZBUvFactor;
+float4 HZBSize;
+Texture2D HZBTexture;
+SamplerState HZBSampler;
+
+// For Debugging
+RWBuffer<int> RWCulledInstanceBuffer;
+RWBuffer<uint> RWGPUCulledInstanceDebugIndirectParameters;
+
+#ifndef ENABLE_LITE_GPU_SCENE_DEBUG
+#define  ENABLE_LITE_GPU_SCENE_DEBUG 0
+#endif
+
+#ifndef UpdatePass
+#define UpdatePass 0
+#endif
+float3 CalcBoundExtent(float3 extent, float4x4 M)
+{
+	float4 ret = 0;
+	
+	ret = abs(float4(extent.x, extent.x, extent.x, extent.x) * M[0]);
+	
+	ret += abs(float4(extent.y, extent.y, extent.y, extent.y) * M[1]);
+	
+	ret += abs(float4(extent.z, extent.z, extent.z, extent.z) * M[2]);
+	
+	return ret.xyz;
+}
+
+float CalcBoundSphereRadius(float radius, float3 extent, float4x4 M)
+{
+	float4 scale = 0;
+	
+	scale = M[0] * M[0];
+	
+	scale += M[1] * M[1];
+	
+	scale += M[2] * M[2];
+	
+	float radiusScale2 = max(max(scale.x, scale.y), scale.z);
+	
+	float BoxExtendMagnitude = sqrt(dot(extent, extent));
+	return max(sqrt(radiusScale2) * radius, BoxExtendMagnitude);
+}
+
+bool OcclusionCullingInstance(float3 BoundsCenter, float3 BoundsExtent)
+{
+	float3 BoundsMin = BoundsCenter.xyz - BoundsExtent.xyz;
+	float3 BoundsMax = BoundsCenter.xyz + BoundsExtent.xyz;
+	float3 Bounds[2] = { BoundsMin, BoundsMax };
+	
+	int NumInFrontOfNearPlane = 0;
+	// Screen rect from bounds
+	float3 RectMin = float3( 1, 1, 1 );
+	float3 RectMax = float3( -1, -1, -1 );
+	LOOP for( int i = 0; i < 8; i++ ) 
+	{
+		float3 PointSrc;
+		PointSrc.x = Bounds[ (i >> 0) & 1 ].x;
+		PointSrc.y = Bounds[ (i >> 1) & 1 ].y;
+		PointSrc.z = Bounds[ (i >> 2) & 1 ].z;
+
+		float4 PointClip = Float3VectorTransform(PointSrc, TranslatedViewProjectionMatrix); 
+		float3 PointScreen = PointClip.xyz / PointClip.w;
+
+		RectMin = min( RectMin, PointScreen );
+		RectMax = max( RectMax, PointScreen );
+		
+		NumInFrontOfNearPlane += PointClip.w < 0;
+	}
+	
+	bool bCrossNearPlane = (NumInFrontOfNearPlane>0 && NumInFrontOfNearPlane<8);
+	// force to draw those partially cross near plane , those totally out of screen should have been culled in frustum culling
+	if(bCrossNearPlane ){return true;}
+	// For those partially out of Screen, clamp the rect to be inside of screen
+	// as we still care about the visibility of its in-screen part
+	// previous implementation force to draw those partially out of screen but do not consider their visibility
+	RectMin.xy = max(RectMin.xy,-1);
+	RectMax.xy = min(RectMax.xy,1);
+	
+	float4 Rect = saturate( float4( RectMin.xy, RectMax.xy ) * float2( 0.5, -0.5 ).xyxy + 0.5 ).xwzy;
+	float4 RectPixels = Rect * HZBSize.xyxy*HZBUvFactor.xyxy;
+	float2 RectSize = ( RectPixels.zw - RectPixels.xy ) ;	
+	float Level = max(ceil( log2( max( RectSize.x, RectSize.y ) ) ), HZBUvFactor.z);
+	Level = min(Level,HZBUvFactor.w);
+	// Check if we can drop one level lower
+	float LevelLower = max( Level - 1, 0 );
+	float4 LowerRect = RectPixels * exp2( -LevelLower );
+	float2 LowerRectSize = ceil( LowerRect.zw ) - floor( LowerRect.xy );
+	 
+	// Use the lower level if we only touch <= 2 texels in both dimensions
+	if( all( LowerRectSize <= 2 ) ){
+		Level = LevelLower;
+	}
+	
+	float MinDepth ;
+	float4 Depth;
+	Depth.x = HZBTexture.SampleLevel( HZBSampler, Rect.xy * HZBUvFactor.xy, Level ).r;
+	Depth.y = HZBTexture.SampleLevel( HZBSampler, Rect.xw * HZBUvFactor.xy, Level ).r;
+	Depth.z = HZBTexture.SampleLevel( HZBSampler, Rect.zy * HZBUvFactor.xy, Level ).r;
+	Depth.w = HZBTexture.SampleLevel( HZBSampler, Rect.zw * HZBUvFactor.xy, Level ).r;
+	MinDepth = min( min(Depth.x, Depth.y), min(Depth.z, Depth.w) );
+
+	// Inverted Z buffer
+	return RectMax.z >= MinDepth;
+}
+
+bool FrustumCullingInstance(float4x4 PermutedPlanes, float3 BoxOrigion, float3 BoxExtent)
+{
+	float4 OrigX = BoxOrigion.xxxx;
+	float4 OrigY = BoxOrigion.yyyy;
+	float4 OrigZ = BoxOrigion.zzzz;
+
+	float3 AbsExt = abs(BoxExtent);
+	float4 AbsExtentX = AbsExt.xxxx;
+	float4 AbsExtentY = AbsExt.yyyy;
+	float4 AbsExtentZ = AbsExt.zzzz;
+
+	float4 PlanesX = PermutedPlanes[0];
+	float4 PlanesY = PermutedPlanes[1];
+	float4 PlanesZ = PermutedPlanes[2];
+	float4 PlanesW = PermutedPlanes[3];
+
+	float4 Distance = OrigX * PlanesX + OrigY * PlanesY + OrigZ * PlanesZ - PlanesW;
+	float4 PushOut = AbsExtentX * abs(PlanesX) + AbsExtentY * abs(PlanesY) + AbsExtentZ * abs(PlanesZ);
+
+	return PushOut.x >= Distance.x && PushOut.y >= Distance.y && PushOut.z >= Distance.z && PushOut.w >= Distance.w;
+}
+
+float ComputeBoundsScreenSize(float3 BoundOrigin, float SphereRadius, float3 InViewOrigin, float4x4 InProjMatrix)
+{
+	float Dist = distance(BoundOrigin, InViewOrigin);
+	
+	float ScreenMultiple = max(0.5f * InProjMatrix[0][0], 0.5f * InProjMatrix[1][1]);
+	
+	float ScreenRadius = ScreenMultiple * SphereRadius / max(1.0f, Dist);
+	
+	return ScreenRadius * 2.0f;
+}
+
+float ComputeBoundsDrawDistance(float ScreenSize, float SphereRadius, float4x4 InProjMatrix)
+{
+	float ScreenMultiple = max(0.5f * InProjMatrix[0][0], 0.5f * InProjMatrix[1][1]);
+	
+	float ScreenRadius = max(1.e-8f, ScreenSize * 0.5f);
+	return (ScreenMultiple * SphereRadius) / ScreenRadius;
+}
+
+[numthreads(THREAD_COUNT, 1, 1)]
+void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
+{
+	const uint InstanceID = DTid.x;
+	if (InstanceID < NumInstances)
+	{
+		uint InstanceType = RWInstanceTypeBuffer[InstanceID];
+		
+		float4 LocalAABBMin = AABBPatchBuffer[2 * InstanceType + 0];
+		float4 LocalAABBMax = AABBPatchBuffer[2 * InstanceType + 1];
+
+		float radius = LocalAABBMin.w;
+		float3 LocalAABBCenter = (LocalAABBMin.xyz + LocalAABBMax.xyz) / 2.0f;
+		float3 LocalAABBExtent = (LocalAABBMax.xyz - LocalAABBMin.xyz) / 2.0f;
+		
+		
+		float4 InstanceTransform0 = RWInstanceTransformBuffer[InstanceID * 4 + 0];
+		float4 InstanceTransform1 = RWInstanceTransformBuffer[InstanceID * 4 + 1];
+		float4 InstanceTransform2 = RWInstanceTransformBuffer[InstanceID * 4 + 2];
+		float4 InstanceTransform3 = RWInstanceTransformBuffer[InstanceID * 4 + 3];
+		
+		float4x4 InstanceTransform = float4x4(
+			InstanceTransform0,
+			InstanceTransform1,
+			InstanceTransform2,
+			InstanceTransform3);
+
+		float3 AABBCenter = Float3VectorTransform(LocalAABBCenter, InstanceTransform).xyz;
+		float3 AABBExtent = CalcBoundExtent(LocalAABBExtent, InstanceTransform);
+		
+		radius = CalcBoundSphereRadius(radius, AABBExtent, InstanceTransform);
+
+		bool bInFrustum0 = FrustumCullingInstance(FrustumPermutedPlanes0, AABBCenter, AABBExtent);
+		bool bInFrustum1 = FrustumCullingInstance(FrustumPermutedPlanes1, AABBCenter, AABBExtent);
+
+		
+		float ScreenSize = ComputeBoundsScreenSize(AABBCenter.xyz, radius, ViewLocation, ProjMatrix);
+		RWGPUUnCulledInstanceScreenSize[InstanceID] = ScreenSize;
+		
+		if ( (bInFrustum0 && bInFrustum1))
+		{
+			if  (OcclusionCullingInstance(AABBCenter+PreviewTranslation.xyz,AABBExtent))
+			{
+				const bool bInstanceUnCulled = ScreenSize > LiteGPUSceneMinScreenSize;
+#if DIM_WAVE_OPS && PLATFORM_SUPPORTS_SM6_0_WAVE_OPERATIONS
+				const uint UnCulledInstancesCount = WaveActiveCountBits(bInstanceUnCulled);
+				if (UnCulledInstancesCount > 0)
+				{
+					uint BaseInsertIndex = 0u;
+					if(WaveIsFirstLane())
+					{
+						
+#if ENABLE_DEPTHDRAWTEST || ENABLE_LITE_GPU_SCENE_DEBUG
+						InterlockedAdd(RWGPUUnCulledInstanceIndirectParameters[1], UnCulledInstancesCount);
+#endif
+						
+						InterlockedAdd(RWGPUUnCulledInstanceNum[0], UnCulledInstancesCount, BaseInsertIndex);
+					}
+					BaseInsertIndex = WaveReadLaneFirst(BaseInsertIndex);
+
+					if(bInstanceUnCulled)
+					{
+						uint InsertIndex = BaseInsertIndex + WavePrefixCountBits(bInstanceUnCulled);
+						RWUnCulledInstanceBuffer[InsertIndex] = (int)InstanceID;
+					}
+				}
+#else
+				if (bInstanceUnCulled)
+				{
+					uint InsertIndex = 0;
+#if ENABLE_DEPTHDRAWTEST || ENABLE_LITE_GPU_SCENE_DEBUG
+					InterlockedAdd(RWGPUUnCulledInstanceIndirectParameters[1], 1u);
+#endif
+					InterlockedAdd(RWGPUUnCulledInstanceNum[0], 1u, InsertIndex);
+                    RWUnCulledInstanceBuffer[InsertIndex] = (int)InstanceID;
+                }
+#endif
+			}
+		}
+#if ENABLE_LITE_GPU_SCENE_DEBUG
+		uint InsertIndex = 0;
+		InterlockedAdd(RWGPUCulledInstanceDebugIndirectParameters[1], 1u, InsertIndex);
+		RWCulledInstanceBuffer[InsertIndex] = (int)InstanceID;
+#endif
+	}
+}
+
+// Initialization
+[numthreads(THREAD_COUNT, 1, 1)]
+void ClearGPUCullingResCS(uint3 DTid : SV_DispatchThreadID)
+{
+	const uint UniqueID = DTid.x;
+	if (UniqueID < NumInstances)
+	{
+#if ENABLE_LITE_GPU_SCENE_DEBUG	
+		RWCulledInstanceBuffer[UniqueID] = -1;
+#endif
+		RWUnCulledInstanceBuffer[UniqueID] = -1;
+		RWGPUUnCulledInstanceScreenSize[UniqueID] = 0;
+#if ENABLE_DEPTHDRAWTEST
+		RWDepthDrawTestResultBuffer[UniqueID] = 0;
+#else
+		RWDepthDrawTestResultBuffer[UniqueID] = 1;
+#endif
+		
+	}
+	
+	if (UniqueID == 0)
+	{
+		RWGPUUnCulledInstanceNum[0] = 0;
+#if ENABLE_DEPTHDRAWTEST || ENABLE_LITE_GPU_SCENE_DEBUG
+		RWGPUUnCulledInstanceIndirectParameters[0] = 36;
+		RWGPUUnCulledInstanceIndirectParameters[1] = 0;
+		RWGPUUnCulledInstanceIndirectParameters[2] = 0;
+		RWGPUUnCulledInstanceIndirectParameters[3] = 0;
+		RWGPUUnCulledInstanceIndirectParameters[4] = 0;
+#endif
+		
+#if ENABLE_LITE_GPU_SCENE_DEBUG	
+		RWGPUCulledInstanceDebugIndirectParameters[0] = 36;
+		RWGPUCulledInstanceDebugIndirectParameters[1] = 0;
+		RWGPUCulledInstanceDebugIndirectParameters[2] = 0;
+		RWGPUCulledInstanceDebugIndirectParameters[3] = 0;
+		RWGPUCulledInstanceDebugIndirectParameters[4] = 0;
+#endif	
+	}
+
+}
+
+Buffer<int> UnCulledInstanceBuffer;
+
+struct FDepthDrawTestVertexInput
+{
+	float4 Position : ATTRIBUTE0;
+	uint InstanceId : SV_InstanceID;
+};
+
+struct FDepthDrawTestVertexOutput
+{
+	float4 OutPosition : SV_POSITION;
+	nointerpolation int ArrayIndex : TEXCOORD0;
+	nointerpolation int InstanceIndex : TEXCOORD1;
+};
+
+
+void DepthDrawTestVS(
+	in FDepthDrawTestVertexInput VSIn,
+	out FDepthDrawTestVertexOutput VSOut
+	)
+{
+	int InstanceIndex = UnCulledInstanceBuffer[VSIn.InstanceId];
+
+	uint InstanceType = RWInstanceTypeBuffer[InstanceIndex];
+		
+
+		
+	float4 LocalAABBMin = AABBPatchBuffer[2 * InstanceType + 0];
+	float4 LocalAABBMax = AABBPatchBuffer[2 * InstanceType + 1];
+
+
+	float3 LocalAABBCenter = (LocalAABBMin.xyz + LocalAABBMax.xyz) / 2.0f;
+	float3 LocalAABBExtent = (LocalAABBMax.xyz - LocalAABBMin.xyz) / 2.0f;
+		
+		
+	float4 InstanceTransform0 = RWInstanceTransformBuffer[InstanceIndex * 4 + 0];
+	float4 InstanceTransform1 = RWInstanceTransformBuffer[InstanceIndex * 4 + 1];
+	float4 InstanceTransform2 = RWInstanceTransformBuffer[InstanceIndex * 4 + 2];
+	float4 InstanceTransform3 = RWInstanceTransformBuffer[InstanceIndex * 4 + 3];
+	
+	float4x4 InstanceTransform = float4x4(InstanceTransform0,
+		InstanceTransform1,
+		InstanceTransform2,
+		InstanceTransform3);
+
+	float3 AABBCenter = mul(float4(LocalAABBCenter, 1), InstanceTransform).xyz;
+	float3 AABBExtent = CalcBoundExtent(LocalAABBExtent, InstanceTransform);
+
+	VSOut.ArrayIndex = VSIn.InstanceId;
+	VSOut.InstanceIndex =	InstanceIndex;
+	VSOut.OutPosition = Float3VectorTransform(VSIn.Position.xyz * AABBExtent + AABBCenter+PreviewTranslation.xyz,  TranslatedViewProjectionMatrix);
+}
+
+EARLYDEPTHSTENCIL
+void DepthDrawTestPS(in FDepthDrawTestVertexOutput PSIn)
+{
+	RWDepthDrawTestResultBuffer[PSIn.ArrayIndex] = PSIn.InstanceIndex;
+}
+
+#if UpdatePass 
+[numthreads(1, 1, 1)]
+#else
+[numthreads(THREAD_COUNT, 1, 1)]
+#endif
+void DepthDrawTestUpdateInstanceNumAndIndicesCS(uint3 DTid : SV_DispatchThreadID)
+{
+#if UpdatePass 
+	// cleanup
+	RWGPUUnCulledInstanceNum[0]=0;
+#else
+	if(DTid.x < NumInstances)
+	{
+		int InstanceID = RWDepthDrawTestResultBuffer[DTid.x];
+		bool bInstanceUnCulled = InstanceID >0 ;
+#if DIM_WAVE_OPS && PLATFORM_SUPPORTS_SM6_0_WAVE_OPERATIONS
+		const uint UnCulledInstancesCount = WaveActiveCountBits(bInstanceUnCulled);
+		if (UnCulledInstancesCount > 0)
+		{
+			uint BaseInsertIndex = 0u;
+			if(WaveIsFirstLane())
+			{ 
+				InterlockedAdd(RWGPUUnCulledInstanceNum[0], UnCulledInstancesCount, BaseInsertIndex);
+			}
+			BaseInsertIndex = WaveReadLaneFirst(BaseInsertIndex);
+
+			if(bInstanceUnCulled)
+			{
+				uint InsertIndex = BaseInsertIndex + WavePrefixCountBits(bInstanceUnCulled);
+				RWUnCulledInstanceBuffer[InsertIndex] = (int)InstanceID;
+			}
+		}
+#else
+		if(bInstanceUnCulled)
+		{
+			uint insert = 0;
+			InterlockedAdd(RWGPUUnCulledInstanceNum[0], 1u, insert);
+			RWUnCulledInstanceBuffer[insert] = InstanceID;
+		}
+#endif
+	}
+#endif
+}
+
+struct FDebugVertexInput
+{
+	float4 Position : ATTRIBUTE0;
+	uint InstanceId : SV_InstanceID;
+};
+
+struct FDebugVertexOutput
+{
+	//int PatchID : ATTRIBUTE1;
+	float4 OutPosition : SV_POSITION;
+	float4 OutColor : ATTRIBUTE1;
+};
+
+struct FDebugPixelInput
+{
+	float4 SvPosition : SV_POSITION;
+	float4 OutColor : ATTRIBUTE1;
+};
+
+
+Buffer<int> CulledLeafInstanceBuffer;
+Buffer<int> InstancePatchIDsBuffer;
+
+
+// decal vertex shader
+void DebugLiteGPUSceneVS(in FDebugVertexInput VSIn,
+	out FDebugVertexOutput VSOut)
+{
+	//int InstanceIndex = VSIn.InstanceId;
+	int InstanceIndex = CulledLeafInstanceBuffer[VSIn.InstanceId];
+	uint InstanceType = RWInstanceTypeBuffer[InstanceIndex];
+		
+	float4 LocalAABBMin = AABBPatchBuffer[2 * InstanceType + 0];
+	float4 LocalAABBMax = AABBPatchBuffer[2 * InstanceType + 1];
+
+	float3 LocalAABBCenter = (LocalAABBMin.xyz + LocalAABBMax.xyz) / 2.0f;
+	float3 LocalAABBExtent = (LocalAABBMax.xyz - LocalAABBMin.xyz) / 2.0f;
+		
+	float4 InstanceTransform0 = RWInstanceTransformBuffer[InstanceIndex * 4 + 0];
+	float4 InstanceTransform1 = RWInstanceTransformBuffer[InstanceIndex * 4 + 1];
+	float4 InstanceTransform2 = RWInstanceTransformBuffer[InstanceIndex * 4 + 2];
+	float4 InstanceTransform3 = RWInstanceTransformBuffer[InstanceIndex * 4 + 3];
+	
+	float4x4 InstanceTransform = float4x4(InstanceTransform0,
+	                InstanceTransform1,
+					InstanceTransform2,
+					InstanceTransform3
+					);
+
+	float3 AABBCenter = mul(float4(LocalAABBCenter, 1), InstanceTransform).xyz;
+	float3 AABBExtent = CalcBoundExtent(LocalAABBExtent, InstanceTransform);
+
+	float4 ColorArray[12] = {
+		float4(1, 0, 0, 1), float4(0, 1, 0, 1), float4(0, 0, 1, 1),
+		float4(1, 1, 0, 1), float4(0, 1, 1, 1), float4(1, 0, 1, 1),
+		float4(1, 0.5, 0.5, 1), float4(0.5, 1, 0.5, 1), float4(0.5, 0.5, 1, 1),
+		float4(0.5, 1, 1, 1), float4(1, 0.5, 1, 1), float4(1, 1, 1, 1)
+	};
+	VSOut.OutColor = ColorArray[InstanceType];
+	VSOut.OutPosition = Float3VectorTransform(VSIn.Position.xyz * AABBExtent + AABBCenter+PreviewTranslation.xyz,  TranslatedViewProjectionMatrix);
+}
+
+// decal pixel shader
+void DebugLiteGPUScenePS(
+	  in FDebugVertexOutput PSIn,
+	  out float4 OutColor : SV_Target0
+	 )
+{
+	/*float4 ColorArray[3] ={float4(1, 0, 0, 1),float4(0, 1, 0, 1),float4(0, 0, 1, 1)};
+	OutColor = ColorArray[PSIn.PatchID];*/
+#if DRAW_CULLED
+	OutColor = float4(PSIn.OutColor.xyz, 0.2);
+#else
+	OutColor = float4(1, 1, 0.5, 0.2);
+#endif
+}

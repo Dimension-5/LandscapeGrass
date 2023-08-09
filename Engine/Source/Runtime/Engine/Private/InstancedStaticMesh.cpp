@@ -43,6 +43,8 @@
 #include "UObject/UObjectIterator.h"
 #include "GenericPlatform/ICursor.h"
 
+#include "Physics/Experimental/PhysScene_Chaos.h"
+
 #if RHI_RAYTRACING
 #endif
 
@@ -2976,11 +2978,42 @@ void UInstancedStaticMeshComponent::CreateAllInstanceBodies()
 	}
 }
 
+#pragma region D5 Optimization
+
+void PreTermBodies(UPrimitiveComponent* PrimitiveComponent, TArray<FBodyInstance*>& InstanceBodies)
+{
+	if (InstanceBodies.IsEmpty())
+		return;
+
+	FPhysScene_Chaos* PhysScene = PrimitiveComponent->GetWorld()->GetPhysicsScene();
+	if (!PhysScene)
+	{
+		return;
+	}
+
+	auto& PhysicsProxyToComponentMap = PhysScene->PhysicsProxyToComponentMap;
+	auto& ComponentToPhysicsProxyMap = PhysScene->ComponentToPhysicsProxyMap;
+	{
+		ComponentToPhysicsProxyMap.Remove(PrimitiveComponent);
+		for (FBodyInstance* InstanceBody : InstanceBodies)
+		{
+			if (InstanceBody && FPhysicsInterface::IsValid(InstanceBody->ActorHandle))
+			{
+				PhysicsProxyToComponentMap.Remove((IPhysicsProxyBase*)InstanceBody->ActorHandle);
+			}
+		}
+	}
+}
+
+#pragma endregion D5 Optimization
+
+
 void UInstancedStaticMeshComponent::ClearAllInstanceBodies()
 {
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_UInstancedStaticMeshComponent_ClearAllInstanceBodies);
 	STAT(FScopeCycleCounter Context(StatId);)
 
+	PreTermBodies(this, InstanceBodies);
 	for (int32 i = 0; i < InstanceBodies.Num(); i++)
 	{
 		if (InstanceBodies[i])

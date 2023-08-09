@@ -222,6 +222,7 @@ public:
 	int32 RemoveOffset = 0;
 	int32 IncreasedOffset = 0;
 	TArray<FInstancedLiteGPUSceneData> LiteGPUSceneDatas;
+	ENGINE_API void UpdateLiteGPUSceneTransforms();
 	ENGINE_API void GetInstanceTransforms(TArray<FInstancedLiteGPUSceneData>& InstanceTransforms, FVector const& Offset) const;
 	//--[D5]
 

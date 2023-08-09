@@ -132,6 +132,7 @@ void ALiteGPUSceneManager::BuildHSIMComponents(HISMArray& InMeshes)
 
 	for (auto& HISM : InMeshes)
 	{
+		HISM->UpdateLiteGPUSceneTransforms();
 		LiteGPUSceneComp->AddInstanceGroup(HISM);
 	}
 }
