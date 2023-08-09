@@ -299,7 +299,6 @@ private:
 	LAYOUT_FIELD(FShaderParameter, TranslatedViewProjectionMatrix);
 	LAYOUT_FIELD(FShaderResourceParameter, UnCulledInstanceBuffer);
 	LAYOUT_FIELD(FShaderResourceParameter, AABBPatchBuffer);
-
 	LAYOUT_FIELD(FShaderResourceParameter, RWInstanceTypeBuffer);
 	LAYOUT_FIELD(FShaderResourceParameter, RWInstanceTransformBuffer);
 };
@@ -310,14 +309,12 @@ struct FLiteGPUSceneDepthDrawTestPS : FGlobalShader
 {
 	DECLARE_SHADER_TYPE(FLiteGPUSceneDepthDrawTestPS, Global);
 
-
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
 		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
 	}
 
 	FLiteGPUSceneDepthDrawTestPS() {}
-
 public:
 	LAYOUT_FIELD(FShaderResourceParameter, RWDepthDrawTestResultBuffer)
 
@@ -388,16 +385,14 @@ public:
 			FVector3f PreviewTranslationVector = FVector3f(View.ViewMatrices.GetPreViewTranslation());
 			FVector3f ViewLoc = FVector3f(View.ViewMatrices.GetViewOrigin());
 			SetShaderValue(RHICmdList, ShaderRHI, PreviewTranslation,
-			               FVector4f(PreviewTranslationVector.X, PreviewTranslationVector.Y, PreviewTranslationVector.Z,
-			                        0));
+			               FVector4f(PreviewTranslationVector.X, PreviewTranslationVector.Y, PreviewTranslationVector.Z, 0));
 			SetShaderValue(RHICmdList, ShaderRHI, TranslatedViewProjectionMatrix, FMatrix44f(View.ViewMatrices.GetTranslatedViewProjectionMatrix()));
 #if ENABLE_LITE_GPU_SCENE_DEBUG
 			SetSRVParameter(RHICmdList, ShaderRHI, CulledLeafInstanceBuffer,
 				bShowCulled ? VisibilityData->RWGPUCulledInstanceBuffer->SRV : VisibilityData->RWGPUUnCulledInstanceIndicesBuffer->SRV);
 #endif
 		}
-		SetSRVParameter(RHICmdList, ShaderRHI, RWInstanceTypeBuffer,
-		                InstanceData->RWInstanceTypeBuffer->SRV);
+		SetSRVParameter(RHICmdList, ShaderRHI, RWInstanceTypeBuffer, InstanceData->RWInstanceTypeBuffer->SRV);
 		SetSRVParameter(RHICmdList, ShaderRHI, RWInstanceTransformBuffer, InstanceData->RWInstanceTransformBuffer->SRV);
 		SetSRVParameter(RHICmdList, ShaderRHI, RWInstanceScaleBuffer, InstanceData->RWInstanceScaleBuffer->SRV);
 		SetSRVParameter(RHICmdList, ShaderRHI, AABBPatchBuffer, InstanceData->MeshAABBBuffer->SRV);
