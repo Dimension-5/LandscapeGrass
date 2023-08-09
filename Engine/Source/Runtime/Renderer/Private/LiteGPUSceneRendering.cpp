@@ -700,38 +700,28 @@ void FLiteGPUSceneProxy::GenerateIndirectDrawBuffer(const FSceneView* View, cons
 		return;
 	}
 	FRHICommandListImmediate& RHICmdList = GRHICommandList.GetImmediateCommandList();
-	/*
-	RHICmdList.TransitionResource(
-		EResourceTransitionAccess::ERWBarrier,
-		EResourceTransitionPipeline::EGfxToCompute,
-		SharedMainVisibilityData->RWInstanceIndiceBuffer->UAV);
-	*/
+	RHICmdList.Transition(FRHITransitionInfo(SharedMainVisibilityData->RWInstanceIndiceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute));
 	SCOPED_DRAW_EVENT(RHICmdList, GenerateIndirectDrawBufferPhase);
 	{
 		// 0 st Clear
 		SCOPED_DRAW_EVENT(RHICmdList, ClearVisibleInstanceCS);
-		FRHIUnorderedAccessView* ComputeToComputeUAVs[] =
+		const FRHITransitionInfo ComputeToComputeUAVs[] =
 		{
 			// resources to write
-			ResVisibilityData->RWInstanceIndiceBuffer->UAV,
-			SharedPerInstanceData->RWPatchCountBuffer->UAV,
-			SharedPerInstanceData->RWPatchCountCopyBuffer->UAV,
-			SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV,
-			ResVisibilityData->RWIndirectDrawDispatchIndiretBuffer->UAV,
-			SharedPerInstanceData->RWNextPatchCountOffsetBuffer->UAV,
-			ResVisibilityData->RWInstanceIndiceBuffer->UAV,
+			FRHITransitionInfo(ResVisibilityData->RWInstanceIndiceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountCopyBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(ResVisibilityData->RWIndirectDrawDispatchIndiretBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWNextPatchCountOffsetBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(ResVisibilityData->RWInstanceIndiceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
 #if ENABLE_LITE_GPU_SCENE_DEBUG
-			SharedPerInstanceData->RWDrawedTriangleCountBuffer->UAV,
+			FRHITransitionInfo(SharedPerInstanceData->RWDrawedTriangleCountBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute)
 #endif
 			//resources to read
-			ResVisibilityData->RWGPUUnCulledInstanceNum->UAV
+			FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceNum->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute)
 		};
-		/*
-		RHICmdList.TransitionResources(
-			EResourceTransitionAccess::ERWBarrier,
-			EResourceTransitionPipeline::EComputeToCompute,
-			ComputeToComputeUAVs, sizeof(ComputeToComputeUAVs) / sizeof(FRHIUnorderedAccessView*));
-		*/
+		RHICmdList.Transition(MakeArrayView(ComputeToComputeUAVs, UE_ARRAY_COUNT(ComputeToComputeUAVs)));
 		TShaderMapRef<FClearVisibleInstanceCS> ClearPassCS(GetGlobalShaderMap(ProxyFeatureLevel));
 		SetComputePipelineState(RHICmdList, ClearPassCS.GetComputeShader());
 		ClearPassCS->SetParameters(RHICmdList, SharedPerInstanceData.Get(), ResVisibilityData);
@@ -745,27 +735,21 @@ void FLiteGPUSceneProxy::GenerateIndirectDrawBuffer(const FSceneView* View, cons
 	{
 		// 3 rd
 		SCOPED_DRAW_EVENT(RHICmdList, GenerateInstanceIndiceCS_FirstPass);
-		FRHIUnorderedAccessView* ComputeToComputeUAVs[] =
+		const FRHITransitionInfo ComputeToComputeUAVs[] =
 		{
 			// resources to read
-			ResVisibilityData->RWGPUUnCulledInstanceBuffer->UAV,
-			ResVisibilityData->RWGPUUnCulledInstanceScreenSize->UAV,
-			SharedPerInstanceData->RWInstancePatchNumBuffer->UAV,
-			SharedPerInstanceData->RWInstanceTypeBuffer->UAV,
-			SharedPerInstanceData->RWInstanceTransformBuffer->UAV,
+			FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceScreenSize->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWInstancePatchNumBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWInstanceTypeBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWInstanceTransformBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
 			//resources to write
-			SharedPerInstanceData->RWPatchCountCopyBuffer->UAV,
-			SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV,
-			SharedPerInstanceData->RWPatchCountBuffer->UAV,
-			ResVisibilityData->RWInstanceIndiceBuffer->UAV,
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountCopyBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(ResVisibilityData->RWInstanceIndiceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute)
 		};
-		/*
-		RHICmdList.TransitionResources(
-			EResourceTransitionAccess::ERWBarrier,
-			EResourceTransitionPipeline::EComputeToCompute,
-			ComputeToComputeUAVs,
-			sizeof(ComputeToComputeUAVs) / sizeof(FRHIUnorderedAccessView*));
-		*/
+		RHICmdList.Transition(MakeArrayView(ComputeToComputeUAVs, UE_ARRAY_COUNT(ComputeToComputeUAVs)));
 		TShaderMapRef<TGenerateInstanceIndiceCS<true>> GenerateCS(GetGlobalShaderMap(ProxyFeatureLevel));
 		SetComputePipelineState(RHICmdList, GenerateCS.GetComputeShader());
 		GenerateCS->SetParameters(RHICmdList, *View, SharedPerInstanceData.Get(), ResVisibilityData);
@@ -775,25 +759,19 @@ void FLiteGPUSceneProxy::GenerateIndirectDrawBuffer(const FSceneView* View, cons
 	}
 	{
 		SCOPED_DRAW_EVENT(RHICmdList, ComputeInstancePatchOffsetCS);
-		FRHIUnorderedAccessView* ComputeToComputeUAVs[] =
+		const FRHITransitionInfo ComputeToComputeUAVs[] =
 		{
 			//Resources to read
-			SharedPerInstanceData->RWPatchCountCopyBuffer->UAV,
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountCopyBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
 			//Resources to write
-			SharedPerInstanceData->RWNextPatchCountOffsetBuffer->UAV,
-			SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV,
-			ResVisibilityData->RWIndirectDrawBuffer->UAV,
+			FRHITransitionInfo(SharedPerInstanceData->RWNextPatchCountOffsetBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(ResVisibilityData->RWIndirectDrawBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
 #if ENABLE_LITE_GPU_SCENE_DEBUG
-			SharedPerInstanceData->RWDrawedTriangleCountBuffer->UAV,
+			FRHITransitionInfo(SharedPerInstanceData->RWDrawedTriangleCountBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute)
 #endif
-
 		};
-		/*
-		RHICmdList.TransitionResources(
-			EResourceTransitionAccess::ERWBarrier,
-			EResourceTransitionPipeline::EComputeToCompute,
-			ComputeToComputeUAVs, sizeof(ComputeToComputeUAVs) / sizeof(FRHIUnorderedAccessView*));
-		*/
+		RHICmdList.Transition(MakeArrayView(ComputeToComputeUAVs, UE_ARRAY_COUNT(ComputeToComputeUAVs)));
 		TShaderMapRef<FComputeInstancePatchOffsetCS> ComputeOffsetCS(GetGlobalShaderMap(ProxyFeatureLevel));
 		SetComputePipelineState(RHICmdList, ComputeOffsetCS.GetComputeShader());
 		ComputeOffsetCS->SetParameters(RHICmdList, SharedPerInstanceData.Get(), ResVisibilityData);
@@ -805,26 +783,20 @@ void FLiteGPUSceneProxy::GenerateIndirectDrawBuffer(const FSceneView* View, cons
 	}
 	{
 		SCOPED_DRAW_EVENT(RHICmdList, GenerateInstanceIndiceCS_SecondPass);
-		FRHIUnorderedAccessView* ComputeToComputeUAVs[] =
+		const FRHITransitionInfo ComputeToComputeUAVs[] =
 		{
 			// resources to read
-			ResVisibilityData->RWGPUUnCulledInstanceBuffer->UAV,
-			ResVisibilityData->RWGPUUnCulledInstanceScreenSize->UAV,
-			SharedPerInstanceData->RWInstanceTypeBuffer->UAV,
-			SharedPerInstanceData->RWInstanceTransformBuffer->UAV,
+			FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(ResVisibilityData->RWGPUUnCulledInstanceScreenSize->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWInstanceTypeBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWInstanceTransformBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
 			//resources to write
-			SharedPerInstanceData->RWPatchCountCopyBuffer->UAV,
-			SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV,
-			SharedPerInstanceData->RWPatchCountBuffer->UAV,
-			ResVisibilityData->RWInstanceIndiceBuffer->UAV,
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountCopyBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(SharedPerInstanceData->RWPatchCountBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute),
+			FRHITransitionInfo(ResVisibilityData->RWInstanceIndiceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::UAVCompute)
 		};
-		/*
-		RHICmdList.TransitionResources(
-			EResourceTransitionAccess::ERWBarrier,
-			EResourceTransitionPipeline::EComputeToCompute,
-			ComputeToComputeUAVs,
-			sizeof(ComputeToComputeUAVs) / sizeof(FRHIUnorderedAccessView*));
-		*/
+		RHICmdList.Transition(MakeArrayView(ComputeToComputeUAVs, UE_ARRAY_COUNT(ComputeToComputeUAVs)));
 		TShaderMapRef<TGenerateInstanceIndiceCS<false>> GenerateCS(GetGlobalShaderMap(ProxyFeatureLevel));
 		SetComputePipelineState(RHICmdList, GenerateCS.GetComputeShader());
 		GenerateCS->SetParameters(RHICmdList, *View, SharedPerInstanceData.Get(), ResVisibilityData);
@@ -833,10 +805,5 @@ void FLiteGPUSceneProxy::GenerateIndirectDrawBuffer(const FSceneView* View, cons
 
 		GenerateCS->UnbindBuffers(RHICmdList);
 	}
-	/*
-	RHICmdList.TransitionResource(
-		EResourceTransitionAccess::ERWBarrier,
-		EResourceTransitionPipeline::EComputeToGfx,
-		SharedMainVisibilityData->RWInstanceIndiceBuffer->UAV);
-	*/
+	RHICmdList.Transition(FRHITransitionInfo(SharedMainVisibilityData->RWInstanceIndiceBuffer->UAV, ERHIAccess::UAVCompute, ERHIAccess::VertexOrIndexBuffer));
 }

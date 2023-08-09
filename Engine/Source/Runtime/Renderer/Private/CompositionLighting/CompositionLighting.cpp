@@ -9,6 +9,9 @@
 #include "PostProcess/PostProcessing.h"
 #include "CompositionLighting/PostProcessAmbientOcclusion.h"
 #include "CompositionLighting/PostProcessDeferredDecals.h"
+// ++[D5]
+#include "CompositionLighting/PostProcessLiteGPUScene.h"
+// --[D5]
 #include "PostProcess/PostProcessSubsurface.h"
 #include "DecalRenderingShared.h"
 #include "VisualizeTexture.h"
@@ -636,6 +639,12 @@ void FCompositionLighting::ProcessAfterBasePass(FRDGBuilder& GraphBuilder, EProc
 			// DBuffer decals with emissive component
 			AddDeferredDecalPass(GraphBuilder, View, DecalPassTextures, EDecalRenderStage::Emissive);
 		}
+
+		// ++[D5]
+		{
+			AddLiteGPUSceneCullingPass(GraphBuilder, View);
+		}
+		// --[D5]
 
 		// Forward shading SSAO is applied before the base pass using only the depth buffer.
 		if (!IsForwardShadingEnabled(View.GetShaderPlatform()) && Mode != EProcessAfterBasePassMode::OnlyBeforeLightingDecals)

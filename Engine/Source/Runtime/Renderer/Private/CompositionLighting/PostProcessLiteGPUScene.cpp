@@ -646,3 +646,79 @@ private:
 };
 
 IMPLEMENT_GLOBAL_SHADER(FLiteGPUSceneCullingCS, "/Engine/Private/LiteGPUSceneCulling.usf", "LiteGPUSceneCullingCS", SF_Compute);
+
+namespace Detail
+{
+	void Cull(FRHICommandList& RHICmdList
+		, const FViewInfo& View
+		, class FLiteGPUSceneProxy* CullingProxy
+		, class FLiteGPUSceneProxyVisibilityData* ResVisibilityData)
+	{
+
+	}	
+	
+	void DepthDrawTest(FRHICommandList& RHICmdList
+		, const FViewInfo& View
+		, class FLiteGPUSceneProxy* CullingProxy
+		, class FLiteGPUSceneProxyVisibilityData* ResVisibilityData)
+	{
+
+	}	
+
+	void Debug(FRHICommandList& RHICmdList
+		, const FViewInfo& View
+		, class FLiteGPUSceneProxy* CullingProxy
+		, class FLiteGPUSceneProxyVisibilityData* ResVisibilityData)
+	{
+
+	}
+};
+
+void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View)
+{
+	static auto CVarEnableLiteGPUScene = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.Display"));
+	bool bLiteGPUScene = CVarEnableLiteGPUScene && CVarEnableLiteGPUScene->GetInt() > 0;
+	if (!bLiteGPUScene)
+	{
+		return;
+	}
+	check(IsInRenderingThread());
+	if (View.bIsSceneCapture || View.bIsReflectionCapture || View.bIsPlanarReflection)
+	{
+		return;
+	}
+
+	GraphBuilder.AddPass(
+		RDG_EVENT_NAME("LiteGPUScene::Culling"),
+		ERDGPassFlags::Compute,
+		[&View](FRHICommandList& RHICmdList)
+		{
+			const FSceneViewFamily& ViewFamily = *(View.Family);
+			FScene& Scene = *(FScene*)ViewFamily.Scene;
+			for (auto Proxy : Scene.CachedLiteGPUScene)
+			{
+				if (Proxy && Proxy->IsInitialized())
+				{
+					Detail::Cull(RHICmdList, View, Proxy,
+						Proxy->SharedMainVisibilityData.Get());
+					if (sLiteGPUSceneEnableDepthDrawTest > 0)
+					{
+						Detail::DepthDrawTest(RHICmdList, View, Proxy,
+							Proxy->SharedMainVisibilityData.Get());
+					}
+
+		#if ENABLE_LITE_GPU_SCENE_DEBUG
+					if (GEnableDebugLiteGPUSceneBounds)
+					{
+						Detail::Debug(
+							RHICmdList, View, View.ViewRect, Proxy,
+							Proxy->SharedMainVisibilityData.Get());
+					}
+		#endif
+					Proxy->GenerateIndirectDrawBuffer(&View, ViewFamily,
+						Proxy->SharedMainVisibilityData.Get(),
+						Proxy->SharedPerInstanceData.Get());
+				}
+			}
+		});
+}
