@@ -205,9 +205,9 @@ public:
 	{
 		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
 		SetShaderValue(RHICmdList, ComputeShaderRHI, PerPatchMaxNum, InstanceData->PerPatchMaxNum);
-		SetShaderValue(RHICmdList, ComputeShaderRHI, ProjMatrix, View.ViewMatrices.GetProjectionMatrix());
-		SetShaderValue(RHICmdList, ComputeShaderRHI, ViewLocation, View.ViewMatrices.GetViewOrigin());
-		SetShaderValue(RHICmdList, ComputeShaderRHI, ViewForward, View.GetViewDirection());
+		SetShaderValue(RHICmdList, ComputeShaderRHI, ProjMatrix, FMatrix44f(View.ViewMatrices.GetProjectionMatrix()));
+		SetShaderValue(RHICmdList, ComputeShaderRHI, ViewLocation, FVector3f(View.ViewMatrices.GetViewOrigin()));
+		SetShaderValue(RHICmdList, ComputeShaderRHI, ViewForward, FVector3f(View.GetViewDirection()));
 		SetShaderValue(RHICmdList, ComputeShaderRHI, FoliageScreenSizeBias, sLiteGPUSceneScreenSizeBias);
 		SetShaderValue(RHICmdList, ComputeShaderRHI, FoliageScreenSizeScale, sLiteGPUSceneLODDistanceScale * View.LODDistanceFactor);
 		SetShaderValue(RHICmdList, ComputeShaderRHI, FoliageMaxScreenSize, sLiteGPUSceneMaxScreenSize);
@@ -687,4 +687,156 @@ void FLiteGPUSceneBufferManager::ReleaseRenderResource()
 		delete RWInstancePatchIDsBufferUploader;
 		RWInstancePatchIDsBufferUploader = nullptr;
 	}
+}
+
+void FLiteGPUSceneProxy::GenerateIndirectDrawBuffer(const FSceneView* View, const FSceneViewFamily& ViewFamily,
+	FLiteGPUSceneProxyVisibilityData* ResVisibilityData,
+	FLiteGPUSceneInstanceData* PerInstanceData) const
+{
+	SCOPE_CYCLE_COUNTER(STAT_GenerateIndirecDrawBuffer);
+
+	if (!ResVisibilityData->bGPUCulling || !ResVisibilityData->bFirstGPUCullinged)
+	{
+		return;
+	}
+	FRHICommandListImmediate& RHICmdList = GRHICommandList.GetImmediateCommandList();
+	/*
+	RHICmdList.TransitionResource(
+		EResourceTransitionAccess::ERWBarrier,
+		EResourceTransitionPipeline::EGfxToCompute,
+		SharedMainVisibilityData->RWInstanceIndiceBuffer->UAV);
+	*/
+	SCOPED_DRAW_EVENT(RHICmdList, GenerateIndirectDrawBufferPhase);
+	{
+		// 0 st Clear
+		SCOPED_DRAW_EVENT(RHICmdList, ClearVisibleInstanceCS);
+		FRHIUnorderedAccessView* ComputeToComputeUAVs[] =
+		{
+			// resources to write
+			ResVisibilityData->RWInstanceIndiceBuffer->UAV,
+			SharedPerInstanceData->RWPatchCountBuffer->UAV,
+			SharedPerInstanceData->RWPatchCountCopyBuffer->UAV,
+			SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV,
+			ResVisibilityData->RWIndirectDrawDispatchIndiretBuffer->UAV,
+			SharedPerInstanceData->RWNextPatchCountOffsetBuffer->UAV,
+			ResVisibilityData->RWInstanceIndiceBuffer->UAV,
+#if ENABLE_LITE_GPU_SCENE_DEBUG
+			SharedPerInstanceData->RWDrawedTriangleCountBuffer->UAV,
+#endif
+			//resources to read
+			ResVisibilityData->RWGPUUnCulledInstanceNum->UAV
+		};
+		/*
+		RHICmdList.TransitionResources(
+			EResourceTransitionAccess::ERWBarrier,
+			EResourceTransitionPipeline::EComputeToCompute,
+			ComputeToComputeUAVs, sizeof(ComputeToComputeUAVs) / sizeof(FRHIUnorderedAccessView*));
+		*/
+		TShaderMapRef<FClearVisibleInstanceCS> ClearPassCS(GetGlobalShaderMap(ProxyFeatureLevel));
+		SetComputePipelineState(RHICmdList, ClearPassCS.GetComputeShader());
+		ClearPassCS->SetParameters(RHICmdList, SharedPerInstanceData.Get(), ResVisibilityData);
+		DispatchComputeShader(RHICmdList, ClearPassCS.GetShader(),
+			FMath::DivideAndRoundUp<uint32>(
+				FMath::Max((int32)PerInstanceData->CullingInstancedNum,
+					SharedPerInstanceData->AllInstanceIndexNum),
+				GPUFOLIAGE_COMPUTE_THREAD_NUM), 1, 1);
+		ClearPassCS->UnbindBuffers(RHICmdList);
+	}
+	{
+		// 3 rd
+		SCOPED_DRAW_EVENT(RHICmdList, GenerateInstanceIndiceCS_FirstPass);
+		FRHIUnorderedAccessView* ComputeToComputeUAVs[] =
+		{
+			// resources to read
+			ResVisibilityData->RWGPUUnCulledInstanceBuffer->UAV,
+			ResVisibilityData->RWGPUUnCulledInstanceScreenSize->UAV,
+			SharedPerInstanceData->RWInstancePatchNumBuffer->UAV,
+			SharedPerInstanceData->RWInstanceTypeBuffer->UAV,
+			SharedPerInstanceData->RWInstanceTransformBuffer->UAV,
+			//resources to write
+			SharedPerInstanceData->RWPatchCountCopyBuffer->UAV,
+			SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV,
+			SharedPerInstanceData->RWPatchCountBuffer->UAV,
+			ResVisibilityData->RWInstanceIndiceBuffer->UAV,
+		};
+		/*
+		RHICmdList.TransitionResources(
+			EResourceTransitionAccess::ERWBarrier,
+			EResourceTransitionPipeline::EComputeToCompute,
+			ComputeToComputeUAVs,
+			sizeof(ComputeToComputeUAVs) / sizeof(FRHIUnorderedAccessView*));
+		*/
+		TShaderMapRef<TGenerateInstanceIndiceCS<true>> GenerateCS(GetGlobalShaderMap(ProxyFeatureLevel));
+		SetComputePipelineState(RHICmdList, GenerateCS.GetComputeShader());
+		GenerateCS->SetParameters(RHICmdList, *View, SharedPerInstanceData.Get(), ResVisibilityData);
+		DispatchIndirectComputeShader(RHICmdList, GenerateCS.GetShader(),
+			ResVisibilityData->RWIndirectDrawDispatchIndiretBuffer->Buffer, 0);
+		GenerateCS->UnbindBuffers(RHICmdList);
+	}
+	{
+		SCOPED_DRAW_EVENT(RHICmdList, ComputeInstancePatchOffsetCS);
+		FRHIUnorderedAccessView* ComputeToComputeUAVs[] =
+		{
+			//Resources to read
+			SharedPerInstanceData->RWPatchCountCopyBuffer->UAV,
+			//Resources to write
+			SharedPerInstanceData->RWNextPatchCountOffsetBuffer->UAV,
+			SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV,
+			ResVisibilityData->RWIndirectDrawBuffer->UAV,
+#if ENABLE_LITE_GPU_SCENE_DEBUG
+			SharedPerInstanceData->RWDrawedTriangleCountBuffer->UAV,
+#endif
+
+		};
+		/*
+		RHICmdList.TransitionResources(
+			EResourceTransitionAccess::ERWBarrier,
+			EResourceTransitionPipeline::EComputeToCompute,
+			ComputeToComputeUAVs, sizeof(ComputeToComputeUAVs) / sizeof(FRHIUnorderedAccessView*));
+		*/
+		TShaderMapRef<FComputeInstancePatchOffsetCS> ComputeOffsetCS(GetGlobalShaderMap(ProxyFeatureLevel));
+		SetComputePipelineState(RHICmdList, ComputeOffsetCS.GetComputeShader());
+		ComputeOffsetCS->SetParameters(RHICmdList, SharedPerInstanceData.Get(), ResVisibilityData);
+		DispatchComputeShader(RHICmdList, ComputeOffsetCS.GetShader(),
+			FMath::DivideAndRoundUp<uint32>(SharedPerInstanceData->AllPatchNum,
+				GPUFOLIAGE_COMPUTE_THREAD_NUM), 1, 1);
+
+		ComputeOffsetCS->UnbindBuffers(RHICmdList);
+	}
+	{
+		SCOPED_DRAW_EVENT(RHICmdList, GenerateInstanceIndiceCS_SecondPass);
+		FRHIUnorderedAccessView* ComputeToComputeUAVs[] =
+		{
+			// resources to read
+			ResVisibilityData->RWGPUUnCulledInstanceBuffer->UAV,
+			ResVisibilityData->RWGPUUnCulledInstanceScreenSize->UAV,
+			SharedPerInstanceData->RWInstanceTypeBuffer->UAV,
+			SharedPerInstanceData->RWInstanceTransformBuffer->UAV,
+			//resources to write
+			SharedPerInstanceData->RWPatchCountCopyBuffer->UAV,
+			SharedPerInstanceData->RWPatchCountOffsetBuffer->UAV,
+			SharedPerInstanceData->RWPatchCountBuffer->UAV,
+			ResVisibilityData->RWInstanceIndiceBuffer->UAV,
+		};
+		/*
+		RHICmdList.TransitionResources(
+			EResourceTransitionAccess::ERWBarrier,
+			EResourceTransitionPipeline::EComputeToCompute,
+			ComputeToComputeUAVs,
+			sizeof(ComputeToComputeUAVs) / sizeof(FRHIUnorderedAccessView*));
+		*/
+		TShaderMapRef<TGenerateInstanceIndiceCS<false>> GenerateCS(GetGlobalShaderMap(ProxyFeatureLevel));
+		SetComputePipelineState(RHICmdList, GenerateCS.GetComputeShader());
+		GenerateCS->SetParameters(RHICmdList, *View, SharedPerInstanceData.Get(), ResVisibilityData);
+		DispatchIndirectComputeShader(RHICmdList, GenerateCS.GetShader(),
+			ResVisibilityData->RWIndirectDrawDispatchIndiretBuffer->Buffer, 0);
+
+		GenerateCS->UnbindBuffers(RHICmdList);
+	}
+	/*
+	RHICmdList.TransitionResource(
+		EResourceTransitionAccess::ERWBarrier,
+		EResourceTransitionPipeline::EComputeToGfx,
+		SharedMainVisibilityData->RWInstanceIndiceBuffer->UAV);
+	*/
 }
