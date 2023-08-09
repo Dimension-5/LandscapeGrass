@@ -575,7 +575,6 @@ public:
 				View.HZB->GetRHI()
 			);
 		}
-
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWUnCulledInstanceBuffer, VisibilityData->RWGPUUnCulledInstanceBuffer->UAV);
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWGPUUnCulledInstanceScreenSize, VisibilityData->RWGPUUnCulledInstanceScreenSize->UAV);
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWGPUUnCulledInstanceNum, VisibilityData->RWGPUUnCulledInstanceNum->UAV);
@@ -676,7 +675,7 @@ namespace Detail
 
 void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View)
 {
-	static auto CVarEnableLiteGPUScene = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.Display"));
+	static auto CVarEnableLiteGPUScene = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.Enable"));
 	bool bLiteGPUScene = CVarEnableLiteGPUScene && CVarEnableLiteGPUScene->GetInt() > 0;
 	if (!bLiteGPUScene)
 	{
@@ -690,7 +689,7 @@ void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View
 
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("LiteGPUScene::Culling"),
-		ERDGPassFlags::Compute,
+		ERDGPassFlags::None | ERDGPassFlags::NeverCull,
 		[&View](FRHICommandList& RHICmdList)
 		{
 			const FSceneViewFamily& ViewFamily = *(View.Family);

@@ -929,6 +929,8 @@ void FLiteGPUSceneProxyVisibilityData::InitVisibilityData(int32 InPatchNum, bool
 			}
 		}
 	);
+
+	bInitialized = true;
 }
 
 void FLiteGPUSceneProxyVisibilityData::InitRenderingThread()
@@ -1029,7 +1031,6 @@ void FLiteGPUSceneProxyVisibilityData::InitRenderingThread()
 		GPUByte += Size;
 	}
 #endif
-	bInitialized = true;
 	UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUSceneProxyVisibilityData::InitRenderingThread"));
 }
 
