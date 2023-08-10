@@ -106,13 +106,6 @@ void ALiteGPUSceneManager::BuildLiteGPUScene()
 
 void ALiteGPUSceneManager::BuildHSIMComponents(HISMArray& InMeshes)
 {
-	TArray<UStaticMesh*> LiteMeshes;
-	for (auto& HISM : InMeshes)
-	{
-		LiteMeshes.Add(HISM->GetStaticMesh());
-	}
-	UE_LOG(LogLiteGPUScene, Display, TEXT("LiteGPUScene: Static Meshes Num %d"), LiteMeshes.Num());
-
 	if (LiteGPUSceneComp != nullptr)
 	{
 		LiteGPUSceneComp->DestroyComponent();
@@ -126,14 +119,18 @@ void ALiteGPUSceneManager::BuildHSIMComponents(HISMArray& InMeshes)
 		LiteGPUSceneComp->RegisterComponent();
 		LiteGPUSceneComp->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::SnapToTargetIncludingScale);
 
+		TArray<UStaticMesh*> LiteMeshes;
+		for (auto& HISM : InMeshes)
+		{
+			LiteMeshes.Add(HISM->GetStaticMesh());
+		}
 		LiteGPUSceneComp->BuildLiteGPUScene(LiteMeshes);
-		LiteGPUSceneComp->GetOutermost()->MarkPackageDirty();
-	}
-
-	for (auto& HISM : InMeshes)
-	{
-		HISM->UpdateLiteGPUSceneTransforms();
-		LiteGPUSceneComp->AddInstanceGroup(HISM);
+		UE_LOG(LogLiteGPUScene, Display, TEXT("LiteGPUScene: Static Meshes Num %d"), LiteMeshes.Num());
+		for (auto& HISM : InMeshes)
+		{
+			HISM->UpdateLiteGPUSceneTransforms();
+			LiteGPUSceneComp->AddInstanceGroup(HISM);
+		}
 	}
 }
 

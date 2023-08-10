@@ -920,7 +920,6 @@ void FLiteGPUSceneProxyVisibilityData::InitVisibilityData(int32 InPatchNum, bool
 	// Init rendering thread
 	FLiteGPUSceneProxyVisibilityData* InitDataPtr = this;
 	ENQUEUE_RENDER_COMMAND(InitLiteGPUSceneProxyVisibilityData)(
-
 		[InitDataPtr](FRHICommandList& RHICmdList)
 		{
 			if (InitDataPtr)

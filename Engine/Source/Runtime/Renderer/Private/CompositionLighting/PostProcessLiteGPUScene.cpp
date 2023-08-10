@@ -653,6 +653,9 @@ namespace Detail
 		, class FLiteGPUSceneProxy* CullingProxy
 		, class FLiteGPUSceneProxyVisibilityData* ResVisibilityData)
 	{
+		SCOPED_DRAW_EVENT(RHICmdList, LiteGPUSceneCulling);
+		SCOPED_GPU_STAT(RHICmdList, LiteGPUSceneCulling);
+
 		FLiteGPUSceneInstanceDataPtr SharedInstanceData = CullingProxy->SharedPerInstanceData;
 		// The number of instances that are waiting for culling
 		// This will be initialized to all, once all the data are uploaded
@@ -761,7 +764,7 @@ void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View
 	}
 
 	GraphBuilder.AddPass(
-		RDG_EVENT_NAME("LiteGPUScene::Culling"),
+		{},
 		ERDGPassFlags::NeverParallel,
 		[&View](FRHICommandList& RHICmdList)
 		{

@@ -148,34 +148,31 @@ bool OcclusionCullingInstance(float3 BoundsCenter, float3 BoundsExtent)
 
 bool FrustumCullingInstance(float4x4 PermutedPlanes, float3 BoxOrigion, float3 BoxExtent)
 {
-	float4 OrigX = BoxOrigion.xxxx;
-	float4 OrigY = BoxOrigion.yyyy;
-	float4 OrigZ = BoxOrigion.zzzz;
+	const float4 OrigX = BoxOrigion.xxxx;
+	const float4 OrigY = BoxOrigion.yyyy;
+	const float4 OrigZ = BoxOrigion.zzzz;
 
-	float3 AbsExt = abs(BoxExtent);
-	float4 AbsExtentX = AbsExt.xxxx;
-	float4 AbsExtentY = AbsExt.yyyy;
-	float4 AbsExtentZ = AbsExt.zzzz;
+	const float3 AbsExt = abs(BoxExtent);
+	const float4 AbsExtentX = AbsExt.xxxx;
+	const float4 AbsExtentY = AbsExt.yyyy;
+	const float4 AbsExtentZ = AbsExt.zzzz;
 
-	float4 PlanesX = PermutedPlanes[0];
-	float4 PlanesY = PermutedPlanes[1];
-	float4 PlanesZ = PermutedPlanes[2];
-	float4 PlanesW = PermutedPlanes[3];
+	const float4 PlanesX = PermutedPlanes[0];
+	const float4 PlanesY = PermutedPlanes[1];
+	const float4 PlanesZ = PermutedPlanes[2];
+	const float4 PlanesW = PermutedPlanes[3];
 
-	float4 Distance = OrigX * PlanesX + OrigY * PlanesY + OrigZ * PlanesZ - PlanesW;
-	float4 PushOut = AbsExtentX * abs(PlanesX) + AbsExtentY * abs(PlanesY) + AbsExtentZ * abs(PlanesZ);
+	const float4 Distance = OrigX * PlanesX + OrigY * PlanesY + OrigZ * PlanesZ - PlanesW;
+	const float4 PushOut = AbsExtentX * abs(PlanesX) + AbsExtentY * abs(PlanesY) + AbsExtentZ * abs(PlanesZ);
 
 	return PushOut.x >= Distance.x && PushOut.y >= Distance.y && PushOut.z >= Distance.z && PushOut.w >= Distance.w;
 }
 
 float ComputeBoundsScreenSize(float3 BoundOrigin, float SphereRadius, float3 InViewOrigin, float4x4 InProjMatrix)
 {
-	float Dist = distance(BoundOrigin, InViewOrigin);
-	
-	float ScreenMultiple = max(0.5f * InProjMatrix[0][0], 0.5f * InProjMatrix[1][1]);
-	
-	float ScreenRadius = ScreenMultiple * SphereRadius / max(1.0f, Dist);
-	
+	const float Dist = distance(BoundOrigin, InViewOrigin);
+	const float ScreenMultiple = max(0.5f * InProjMatrix[0][0], 0.5f * InProjMatrix[1][1]);
+	const float ScreenRadius = ScreenMultiple * SphereRadius / max(1.0f, Dist);
 	return ScreenRadius * 2.0f;
 }
 
@@ -202,7 +199,6 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 		float3 LocalAABBCenter = (LocalAABBMin.xyz + LocalAABBMax.xyz) / 2.0f;
 		float3 LocalAABBExtent = (LocalAABBMax.xyz - LocalAABBMin.xyz) / 2.0f;
 		
-		
 		float4 InstanceTransform0 = RWInstanceTransformBuffer[InstanceID * 4 + 0];
 		float4 InstanceTransform1 = RWInstanceTransformBuffer[InstanceID * 4 + 1];
 		float4 InstanceTransform2 = RWInstanceTransformBuffer[InstanceID * 4 + 2];
@@ -221,7 +217,6 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 
 		bool bInFrustum0 = FrustumCullingInstance(FrustumPermutedPlanes0, AABBCenter, AABBExtent);
 		bool bInFrustum1 = FrustumCullingInstance(FrustumPermutedPlanes1, AABBCenter, AABBExtent);
-
 		
 		float ScreenSize = ComputeBoundsScreenSize(AABBCenter.xyz, radius, ViewLocation, ProjMatrix);
 		RWGPUUnCulledInstanceScreenSize[InstanceID] = ScreenSize;
@@ -242,12 +237,11 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 #if ENABLE_DEPTHDRAWTEST || ENABLE_LITE_GPU_SCENE_DEBUG
 						InterlockedAdd(RWGPUUnCulledInstanceIndirectParameters[1], UnCulledInstancesCount);
 #endif
-						
 						InterlockedAdd(RWGPUUnCulledInstanceNum[0], UnCulledInstancesCount, BaseInsertIndex);
 					}
 					BaseInsertIndex = WaveReadLaneFirst(BaseInsertIndex);
 
-					if(bInstanceUnCulled)
+					if (bInstanceUnCulled)
 					{
 						uint InsertIndex = BaseInsertIndex + WavePrefixCountBits(bInstanceUnCulled);
 						RWUnCulledInstanceBuffer[InsertIndex] = (int)InstanceID;

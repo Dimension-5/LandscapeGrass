@@ -1049,8 +1049,9 @@ void FMeshDrawCommand::SetDrawParametersAndFinalize(
 		VertexParams.NumVertices = BatchElement.MaxVertexIndex - BatchElement.MinVertexIndex + 1;
 		checkf(!BatchElement.IndirectArgsBuffer, TEXT("FMeshBatchElement::NumPrimitives must be set to 0 when a IndirectArgsBuffer is used"));
 		//++[D5]
-		IndirectArgs.Offset = 0;
 		IndirectDrawCount = 0;
+		IndirectArgs.Buffer = 0;
+		IndirectArgs.Offset = 0;
 		IndirectArgs.Stride = 0;
 		IndirectArgs.CounterOffset = 0;
 		IndirectArgs.CounterBuffer = NULL;
@@ -1444,8 +1445,8 @@ void FMeshDrawCommand::SubmitDrawEnd(const FMeshDrawCommand& MeshDrawCommand, ui
 			{
 				RHICmdList.MultiDrawIndexedPrimitiveIndirect(
 					MeshDrawCommand.IndexBuffer, // IB
-					MeshDrawCommand.IndirectArgs.Buffer, // AB
-					MeshDrawCommand.IndirectArgs.Offset, // AB OFFSET
+					bDoOverrideArgs ? IndirectArgsOverrideBuffer : MeshDrawCommand.IndirectArgs.Buffer,
+					bDoOverrideArgs ? IndirectArgsOverrideByteOffset : MeshDrawCommand.IndirectArgs.Offset,
 					MeshDrawCommand.IndirectArgs.CounterBuffer, // CB
 					MeshDrawCommand.IndirectArgs.CounterOffset, // CB OFFSET
 					MeshDrawCommand.IndirectDrawCount // DRAW COUNT
@@ -1455,8 +1456,8 @@ void FMeshDrawCommand::SubmitDrawEnd(const FMeshDrawCommand& MeshDrawCommand, ui
 			{
 				RHICmdList.DrawIndexedPrimitiveIndirect(
 					MeshDrawCommand.IndexBuffer,
-					MeshDrawCommand.IndirectArgs.Buffer,
-					MeshDrawCommand.IndirectArgs.Offset
+					bDoOverrideArgs ? IndirectArgsOverrideBuffer : MeshDrawCommand.IndirectArgs.Buffer,
+					bDoOverrideArgs ? IndirectArgsOverrideByteOffset : MeshDrawCommand.IndirectArgs.Offset
 				);
 			}
 			//--[D5]

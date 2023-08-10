@@ -334,24 +334,15 @@ public:
 	)
 	{
 		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
-
 		SetShaderValue(RHICmdList, ComputeShaderRHI, AllPatchNum, VisibilityData->TotalPatchNum);
-
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, PatchCountCopyBuffer, InstanceData->RWPatchCountCopyBuffer->SRV);
-
 		// UAV
-
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWPatchCountOffsetBuffer,
 			InstanceData->RWPatchCountOffsetBuffer->UAV);
-
-
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWNextPatchCountOffsetBuffer,
 			InstanceData->RWNextPatchCountOffsetBuffer->UAV);
-
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWIndirectDrawBuffer, VisibilityData->RWIndirectDrawBuffer->UAV);
-
 		SetSRVParameter(RHICmdList, ComputeShaderRHI, AllPatchInfoBuffer, InstanceData->AllPatchInfoBuffer->SRV);
-
 #if ENABLE_LITE_GPU_SCENE_DEBUG
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWDrawedTriangleCountBuffer,
 			InstanceData->RWDrawedTriangleCountBuffer->UAV);
@@ -364,13 +355,8 @@ public:
 	void UnbindBuffers(FRHICommandList& RHICmdList)
 	{
 		FRHIComputeShader* ComputeShaderRHI = RHICmdList.GetBoundComputeShader();
-
-
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWPatchCountOffsetBuffer, nullptr);
-
-
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWNextPatchCountOffsetBuffer, nullptr);
-
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWIndirectDrawBuffer, nullptr);
 		//For Debugging
 		SetUAVParameter(RHICmdList, ComputeShaderRHI, RWDrawedTriangleCountBuffer, nullptr);

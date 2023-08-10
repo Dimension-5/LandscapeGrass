@@ -48,7 +48,7 @@ public:
 
 	void BuildLiteGPUScene();
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "ALiteGPUSceneManager")
+	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "ALiteGPUSceneManager")
 	TObjectPtr<ULiteGPUSceneComponent> LiteGPUSceneComp;
 private:
 	virtual void PreRegisterAllComponents() override;

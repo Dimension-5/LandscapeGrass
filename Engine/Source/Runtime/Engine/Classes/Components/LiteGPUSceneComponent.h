@@ -742,7 +742,6 @@ public:
 	int32									AllInstanceNum;
 	int32									CurInstanceNum;
 	int32									MaxInstanceNum;
-	TMap<int32, TArray<FLiteGPUSceneMeshPatchInfo>> MaterialToPatchMap;
 	FLiteGPUSceneInstanceDataPtr SharedPerInstanceData;
 
 	TArray<class UHierarchicalInstancedStaticMeshComponent*> RemovedHISMs;
@@ -752,20 +751,18 @@ public:
 
 	FLiteGPUSceneProxyVisibilityDataPtr SharedMainVisibilityData;
 
+	TArray<uint32> CombinedIndiceBufferData;
+	TMap<int32, TArray<FLiteGPUSceneMeshPatchInfo>> MaterialToPatchMap;
+	TArray<FLiteGPUSceneMeshVertex>		CombinedVertexBufferData;
+	TArray<FLiteGPUSceneMeshPatchInfo>	AllPatches;
+
 	/*
 	 * Actually, this stores the max lod numbers among the meshes
 	 */
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Components|LiteGPUSceneComponent")
 	int32 PerPatchMaxNum;
-
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Components|LiteGPUSceneComponent")
 	TArray<TObjectPtr<UStaticMesh>>				AllSourceMeshes;
-	UPROPERTY()
-	TArray<FLiteGPUSceneMeshPatchInfo>	AllPatches;
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Category = "Components|LiteGPUSceneComponent")
 	TArray<TObjectPtr<UMaterialInterface>>		AllUsedMats;
-	UPROPERTY()
-	TArray<FLiteGPUSceneMeshVertex>		CombinedVertexBufferData;
-	UPROPERTY()
-	TArray<uint32>							CombinedIndiceBufferData;
 };
