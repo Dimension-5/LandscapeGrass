@@ -145,11 +145,6 @@ class UHierarchicalInstancedStaticMeshComponent : public UInstancedStaticMeshCom
 	ENGINE_API ~UHierarchicalInstancedStaticMeshComponent();
 
 	TSharedPtr<TArray<FClusterNode>, ESPMode::ThreadSafe> ClusterTreePtr;
-
-	// ++[D5] 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Culling)
-	bool bUseLiteGPUScene = false;
-	// --[D5]
 	
 	// If true then we allow a translated space when building the cluster tree.
 	// This can help for impementations (foliage) where we can have instances with offsets to large for single float precision.
@@ -219,8 +214,6 @@ class UHierarchicalInstancedStaticMeshComponent : public UInstancedStaticMeshCom
 public:
 	int32 InstanceCount = 0;
 	TArray<uint32> GPUDrivenInstanceIndices;
-	int32 RemoveOffset = 0;
-	int32 IncreasedOffset = 0;
 	TArray<FInstancedLiteGPUSceneData> LiteGPUSceneDatas;
 	ENGINE_API void UpdateLiteGPUSceneTransforms();
 	ENGINE_API void GetInstanceTransforms(TArray<FInstancedLiteGPUSceneData>& InstanceTransforms, FVector const& Offset) const;

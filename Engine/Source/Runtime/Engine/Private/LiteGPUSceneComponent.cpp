@@ -410,10 +410,11 @@ void FLiteGPUSceneInstanceData::UpdateIncreasedData(class ULiteGPUSceneComponent
 
 	//  the Increased offset records the last number of Instance count on this Key(HISM)
 	// Thus a compare and subtraction can give the real number that needs to be updated
-	if (Key->IncreasedOffset < Key->InstanceCount)
+	if (IncreasedOffsets[Key] < Key->InstanceCount)
 	{
+		const auto IncreasedOffset = IncreasedOffsets[Key];
 		// The number to update is limited for efficiency
-		int32 NewInstanceCount = FMath::Min<uint32>(ONEFRAME_UPDATE_INSTANCE_NUM, Key->InstanceCount - Key->IncreasedOffset);
+		int32 NewInstanceCount = FMath::Min<uint32>(ONEFRAME_UPDATE_INSTANCE_NUM, Key->InstanceCount - IncreasedOffset);
 
 		uint32 LastInstancedIndicesNum = InstanceNum;
 
@@ -429,14 +430,14 @@ void FLiteGPUSceneInstanceData::UpdateIncreasedData(class ULiteGPUSceneComponent
 		{
 			SCOPE_CYCLE_COUNTER(STAT_CopyInstanceData);
 
-			const FMatrix& T = Key->LiteGPUSceneDatas[InstanceIndex + Key->IncreasedOffset].TransformsData;
+			const FMatrix& T = Key->LiteGPUSceneDatas[InstanceIndex + IncreasedOffset].TransformsData;
 			for (int i = 0; i < 4; i++)
 			{
 				UploadInstanceTransformData[(InstanceIndex + LastInstancedIndicesNum) * 4 + i] = FVector4f(T.M[i][0], T.M[i][1], T.M[i][2], T.M[i][3]);
 			}
-			UploadInstanceScaleData[InstanceIndex + LastInstancedIndicesNum] = Key->LiteGPUSceneDatas[InstanceIndex + Key->IncreasedOffset].Scale;
-			check(Key->LiteGPUSceneDatas[InstanceIndex + Key->IncreasedOffset].MeshIndex <= 255);
-			UploadInstanceFoliageTypeData[InstanceIndex + LastInstancedIndicesNum] = Key->LiteGPUSceneDatas[InstanceIndex + Key->IncreasedOffset].MeshIndex;
+			UploadInstanceScaleData[InstanceIndex + LastInstancedIndicesNum] = Key->LiteGPUSceneDatas[InstanceIndex + IncreasedOffset].Scale;
+			check(Key->LiteGPUSceneDatas[InstanceIndex + IncreasedOffset].MeshIndex <= 255);
+			UploadInstanceFoliageTypeData[InstanceIndex + LastInstancedIndicesNum] = Key->LiteGPUSceneDatas[InstanceIndex + IncreasedOffset].MeshIndex;
 			// This stores the Key to record the relations
 			InstancedKeyComponents[InstanceIndex + LastInstancedIndicesNum] = Key;
 		}
@@ -489,7 +490,7 @@ void FLiteGPUSceneInstanceData::UpdateIncreasedData(class ULiteGPUSceneComponent
 
 					int32 InstanceStart = NewInstanceIndex * PerPatchMaxNum;
 
-					const FInstancedLiteGPUSceneData& InstanceData = Key->LiteGPUSceneDatas[Key->IncreasedOffset + i];
+					const FInstancedLiteGPUSceneData& InstanceData = Key->LiteGPUSceneDatas[IncreasedOffset + i];
 					if (PatchInfo.MeshIndex == InstanceData.MeshIndex)
 					{
 						int32 InsertIndex = UploadInstancePatchNum[NewInstanceIndex];
@@ -514,7 +515,7 @@ void FLiteGPUSceneInstanceData::UpdateIncreasedData(class ULiteGPUSceneComponent
 #endif
 
 		//Update the offset
-		Key->IncreasedOffset += NewInstanceCount;
+		IncreasedOffsets[Key] += NewInstanceCount;
 	}
 }
 
@@ -531,9 +532,11 @@ void FLiteGPUSceneInstanceData::UpdateRemoveData(class ULiteGPUSceneComponent* C
 	FrameData& CurrentFrameData = FrameBufferedData[FrameBufferSelectionCounter];
 #endif
 
-	if (Key->RemoveOffset < Key->InstanceCount)
+	if (RemoveOffsets[Key] < Key->InstanceCount)
 	{
-		int32 InstanceCountToRemove = FMath::Min<uint32>(ONEFRAME_REMOVE_INSTANCE_NUM, Key->InstanceCount - Key->RemoveOffset);
+		const auto RemoveOffset = RemoveOffsets[Key];
+
+		int32 InstanceCountToRemove = FMath::Min<uint32>(ONEFRAME_REMOVE_INSTANCE_NUM, Key->InstanceCount - RemoveOffset);
 		uint32 Num = InstanceNum;
 		InstanceNum -= InstanceCountToRemove;
 		Comp->AllInstanceNum -= InstanceCountToRemove;
@@ -551,9 +554,9 @@ void FLiteGPUSceneInstanceData::UpdateRemoveData(class ULiteGPUSceneComponent* C
 			int32 LastIndex = Num - 1;
 			auto LastComp = InstancedKeyComponents[LastIndex];
 
-			if (LastIndex != Key->GPUDrivenInstanceIndices[Index + Key->RemoveOffset])
+			if (LastIndex != Key->GPUDrivenInstanceIndices[Index + RemoveOffset])
 			{
-				uint32 RemovedIndex = Key->GPUDrivenInstanceIndices[Index + Key->RemoveOffset];//
+				uint32 RemovedIndex = Key->GPUDrivenInstanceIndices[Index + RemoveOffset];//
 				UploadInstanceFoliageTypeData[RemovedIndex] = UploadInstanceFoliageTypeData[LastIndex];
 				UploadInstanceScaleData[RemovedIndex] = UploadInstanceScaleData[LastIndex];
 				for (int i = 0; i < 4; i++)
@@ -604,7 +607,7 @@ void FLiteGPUSceneInstanceData::UpdateRemoveData(class ULiteGPUSceneComponent* C
 #else
 		CurrentFrameData.bUpdateFrame = true;
 #endif
-		Key->RemoveOffset += InstanceCountToRemove;
+		RemoveOffsets[Key] += InstanceCountToRemove;
 	}
 }
 
@@ -1296,16 +1299,16 @@ void ULiteGPUSceneComponent::RemoveInstanceGroup(class UHierarchicalInstancedSta
 	CurInstanceNum -= Key->InstanceCount;
 }
 
-
 void ULiteGPUSceneComponent::UpdateIncreasedGroup()
 {
 	int32 IncreasedThisFrame = 0;
 	for (int32 Index = 0; Index < IncreasedHISMs.Num(); Index++)
 	{
 		check(IncreasedHISMs[Index]);
+		if (!SharedPerInstanceData->IncreasedOffsets.Find(IncreasedHISMs[Index]))
+			SharedPerInstanceData->IncreasedOffsets.Add(IncreasedHISMs[Index], 0);
 
-		int32 MaxIncreased = FMath::Min<uint32>(ONEFRAME_UPDATE_INSTANCE_NUM, IncreasedHISMs[Index]->InstanceCount - IncreasedHISMs[Index]->IncreasedOffset);
-
+		int32 MaxIncreased = FMath::Min<uint32>(ONEFRAME_UPDATE_INSTANCE_NUM, IncreasedHISMs[Index]->InstanceCount - SharedPerInstanceData->IncreasedOffsets[IncreasedHISMs[Index]]);
 		if (AllInstanceNum + MaxIncreased <= MAX_BUFFER_ARRAY_NUM)
 		{
 			SharedPerInstanceData->UpdateIncreasedData(this, IncreasedHISMs[Index]);
@@ -1326,7 +1329,7 @@ void ULiteGPUSceneComponent::UpdateIncreasedGroup()
 	for (int32 Index = 0; Index < IncreasedHISMs.Num(); Index++)
 	{
 		check(IncreasedHISMs[Index]);
-		if (IncreasedHISMs[Index]->IncreasedOffset >= IncreasedHISMs[Index]->InstanceCount)
+		if (SharedPerInstanceData->IncreasedOffsets[IncreasedHISMs[Index]] >= IncreasedHISMs[Index]->InstanceCount)
 		{
 			IncreasedHISMs[Index]->LiteGPUSceneDatas.Empty();
 			MarkForIncreased.Add(Index);
@@ -1385,9 +1388,11 @@ void ULiteGPUSceneComponent::UpdateRemovedGroup()
 		{
 			IncreasedHISMs.Remove(RemovedHISMs[Index]);
 			// No need to add instance any more for this HISM
-			RemovedHISMs[Index]->InstanceCount = RemovedHISMs[Index]->IncreasedOffset;
+			RemovedHISMs[Index]->InstanceCount = SharedPerInstanceData->IncreasedOffsets[RemovedHISMs[Index]];
 		}
 		check(RemovedHISMs[Index]);
+		if (!SharedPerInstanceData->RemoveOffsets.Find(RemovedHISMs[Index]))
+			SharedPerInstanceData->RemoveOffsets.Add(RemovedHISMs[Index], 0);
 		SharedPerInstanceData->UpdateRemoveData(this, RemovedHISMs[Index]);
 		RemovedThisFrame++;
 		if (sEnableRemoveInstanceMultiFrame)
@@ -1404,7 +1409,7 @@ void ULiteGPUSceneComponent::UpdateRemovedGroup()
 	for (int32 Index = 0; Index < RemovedHISMs.Num(); Index++)
 	{
 		check(RemovedHISMs[Index]);
-		if (RemovedHISMs[Index]->RemoveOffset >= RemovedHISMs[Index]->InstanceCount)
+		if (SharedPerInstanceData->RemoveOffsets[RemovedHISMs[Index]] >= RemovedHISMs[Index]->InstanceCount)
 		{
 			RemovedHISMs[Index]->GPUDrivenInstanceIndices.Empty();
 			RemovedHISMs[Index]->ClearInstances();

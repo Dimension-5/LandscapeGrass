@@ -221,9 +221,9 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 		float ScreenSize = ComputeBoundsScreenSize(AABBCenter.xyz, radius, ViewLocation, ProjMatrix);
 		RWGPUUnCulledInstanceScreenSize[InstanceID] = ScreenSize;
 		
-		if ( (bInFrustum0 && bInFrustum1))
+		if (bInFrustum0 && bInFrustum1)
 		{
-			if  (OcclusionCullingInstance(AABBCenter+PreviewTranslation.xyz,AABBExtent))
+			if (OcclusionCullingInstance(AABBCenter+PreviewTranslation.xyz,AABBExtent))
 			{
 				const bool bInstanceUnCulled = ScreenSize > LiteGPUSceneMinScreenSize;
 #if DIM_WAVE_OPS && PLATFORM_SUPPORTS_SM6_0_WAVE_OPERATIONS
@@ -233,7 +233,6 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 					uint BaseInsertIndex = 0u;
 					if(WaveIsFirstLane())
 					{
-						
 #if ENABLE_DEPTHDRAWTEST || ENABLE_LITE_GPU_SCENE_DEBUG
 						InterlockedAdd(RWGPUUnCulledInstanceIndirectParameters[1], UnCulledInstancesCount);
 #endif

@@ -121,10 +121,8 @@ Buffer<int> UnCulledInstanceBuffer;
 float3 ViewLocation;
 float3 ViewForward;
 
-
 Buffer<uint> InstancePatchNumBuffer;
 Buffer<uint> InstancePatchIDsBuffer;
-
 
 Buffer<float4> RWInstanceTransformBuffer;
 Buffer<uint> RWInstanceTypeBuffer;
@@ -139,21 +137,16 @@ int PerPatchMaxNum;
 [numthreads(THREAD_COUNT, 1, 1)]
 void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 {
-	
 	const uint UniqueID = DTid.x;
 	const uint UnCulledInstanceNum = GPUUnCulledInstanceNum[0];
-	if (UniqueID < UnCulledInstanceNum  )
+	if (UniqueID < UnCulledInstanceNum)
 	{
 		const int InstanceID = UnCulledInstanceBuffer[UniqueID];
 		float ScreenSize = min(GPUUnCulledInstanceScreenSize[InstanceID], FoliageMaxScreenSize);
 
-		
-
 		uint PatchStart = InstanceID * PerPatchMaxNum;
 		uint PatchNum = InstancePatchNumBuffer[InstanceID];
-
 		uint TypeIndex = RWInstanceTypeBuffer[InstanceID];
-		
 		
 		float4 LocalAABBMin = AABBPatchBuffer[2 * TypeIndex + 0];
 		float4 LocalAABBMax = AABBPatchBuffer[2 * TypeIndex + 1];
@@ -173,12 +166,8 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 					);
 		
 		float3 AABBExtent = CalcBoundExtent(LocalAABBExtent, InstanceTransform);
-		
 		Radius = CalcBoundSphereRadius(Radius, AABBExtent, InstanceTransform);
-		
 		float CameraDrawDistance = ComputeBoundsDrawDistance(ScreenSize, Radius, ProjMatrix);
-			
-
 		uint ID = 0;
 		for (ID = 0; ID < PatchNum; ID++)
 		{
@@ -196,7 +185,6 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 				float FarthestCameraDistance = ComputeBoundsDrawDistance(ScreenSizeMin, Radius, ProjMatrix);
 				float ClosestCameraDistance = ComputeBoundsDrawDistance(ScreenSizeMax, Radius, ProjMatrix);
 				
-				
 				if (CameraDrawDistance >= (ClosestCameraDistance) && CameraDrawDistance < (FarthestCameraDistance))
 				{
 					
@@ -212,7 +200,6 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 					InterlockedAdd(RWPatchCountBuffer[PatchID], 1u, insert);
 					RWInstanceIndiceBuffer[PatchInstanceIndexStart + insert] = (float) InstanceID;
 #endif
-					
 				}
 			}
 		}
@@ -222,8 +209,7 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 Buffer<uint> PatchCountCopyBuffer;
 
 [numthreads(THREAD_COUNT, 1, 1)]
-void ComputeInstancePatchOffsetCS(
-	uint3 DTid : SV_DispatchThreadID)
+void ComputeInstancePatchOffsetCS(uint3 DTid : SV_DispatchThreadID)
 {
 	const uint UniqueID = DTid.x;
 	if (UniqueID < AllPatchNum)

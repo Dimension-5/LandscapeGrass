@@ -104,6 +104,11 @@ class UInstancedStaticMeshComponent : public UStaticMeshComponent, public ISMIns
 	UPROPERTY(Transient)
 	TArray<FMatrix> PerInstancePrevTransform;
 
+	// ++[D5] 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Culling)
+	bool bUseLiteGPUScene = false;
+	// --[D5]
+
 	/** Defines the number of floats that will be available per instance for custom data */
 	UPROPERTY(EditAnywhere, Category=Instances, AdvancedDisplay)
 	int32 NumCustomDataFloats;

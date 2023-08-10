@@ -496,6 +496,9 @@ public:
 
 	FInstancedStaticMeshSceneProxy(UInstancedStaticMeshComponent* InComponent, ERHIFeatureLevel::Type InFeatureLevel)
 	:	FStaticMeshSceneProxy(InComponent, true)
+		// ++[D5] 
+		, bUseLiteGPUScene(InComponent->bUseLiteGPUScene)
+		// --[D5]
 	,	StaticMesh(InComponent->GetStaticMesh())
 	,	InstancedRenderData(InComponent, InFeatureLevel)
 #if WITH_EDITOR
@@ -606,6 +609,7 @@ protected:
 
 	/** Per component render data */
 	FInstancedStaticMeshRenderData InstancedRenderData;
+	bool bUseLiteGPUScene;
 
 #if WITH_EDITOR
 	/* If we we have any selected instances */

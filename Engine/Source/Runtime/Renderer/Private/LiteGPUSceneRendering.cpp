@@ -460,7 +460,6 @@ void FLiteGPUSceneBufferManager::UpdateUploader(FRHICommandList& RHICmdList, cla
 	}
 	if (RWInstanceScaleBufferUploader)
 	{
-
 		uint32 UpdateNum = DirtyBufferNum;
 		const bool UploaderReady = RWInstanceScaleBufferUploader->Init(
 			GPixelFormats[PF_A32B32G32R32F].BlockBytes,
@@ -543,7 +542,6 @@ void FLiteGPUSceneBufferManager::UpdateUploader(FRHICommandList& RHICmdList, cla
 	}
 	if (RWInstancePatchIDsBufferUploader)
 	{
-
 		uint32 UpdateNum = DirtyBufferNum * InstanceDataPtr->PerPatchMaxNum;
 		const bool UploaderReady = RWInstancePatchIDsBufferUploader->Init(
 			GPixelFormats[PF_R8_UINT].BlockBytes,

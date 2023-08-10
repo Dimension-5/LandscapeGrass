@@ -842,9 +842,6 @@ SIZE_T FHierarchicalStaticMeshSceneProxy::GetTypeHash() const
 
 FHierarchicalStaticMeshSceneProxy::FHierarchicalStaticMeshSceneProxy(UHierarchicalInstancedStaticMeshComponent* InComponent, ERHIFeatureLevel::Type InFeatureLevel)
 : FInstancedStaticMeshSceneProxy(InComponent, InFeatureLevel)
-// ++[D5]
-, bUseLiteGPUScene(InComponent->bUseLiteGPUScene)
-// --[D5]
 , ClusterTreePtr(InComponent->ClusterTreePtr.ToSharedRef())
 , ClusterTree(*InComponent->ClusterTreePtr)
 , UnbuiltBounds(InComponent->UnbuiltInstanceBoundsList)
@@ -1277,6 +1274,11 @@ struct FFoliageElementParams
 
 void FHierarchicalStaticMeshSceneProxy::FillDynamicMeshElements(const FSceneView* View, FMeshElementCollector& Collector, const FFoliageElementParams& ElementParams, const FFoliageRenderInstanceParams& Params) const
 {
+	// ++[D5]
+	if (bUseLiteGPUScene)
+		return;
+	// --[D5]
+
 	SCOPE_CYCLE_COUNTER(STAT_FoliageBatchTime);
 	int64 TotalTriangles = 0;
 
@@ -2082,9 +2084,6 @@ static FBox GetClusterTreeBounds(TArray<FClusterNode> const& InClusterTree, FVec
 
 UHierarchicalInstancedStaticMeshComponent::UHierarchicalInstancedStaticMeshComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
-	// ++[D5] 
-	, bUseLiteGPUScene(false)
-	// --[D5]
 	, ClusterTreePtr(MakeShareable(new TArray<FClusterNode>))
 	, bUseTranslatedInstanceSpace(false)
 	, TranslatedInstanceSpaceOrigin(ForceInitToZero)
@@ -3325,7 +3324,6 @@ FPrimitiveSceneProxy* UHierarchicalInstancedStaticMeshComponent::CreateStaticMes
 	{
 		return ::new Nanite::FSceneProxy(NaniteMaterials, this);
 	}
-	
 	return ::new FHierarchicalStaticMeshSceneProxy(this, GetWorld()->GetFeatureLevel());
 }
 

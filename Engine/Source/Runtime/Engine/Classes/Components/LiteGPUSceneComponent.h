@@ -393,6 +393,9 @@ public:
 	 */
 	int32 PerPatchMaxNum;
 	bool bInitialized;
+
+	TMap<TObjectPtr<UHierarchicalInstancedStaticMeshComponent>, int32> IncreasedOffsets;
+	TMap<TObjectPtr<UHierarchicalInstancedStaticMeshComponent>, int32> RemoveOffsets;
 };
 
 struct FLiteGPUSceneMeshVertexBuffer final : public FVertexBuffer

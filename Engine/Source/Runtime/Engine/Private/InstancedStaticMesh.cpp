@@ -1905,6 +1905,11 @@ void FInstancedStaticMeshSceneProxy::CreateRenderThreadResources()
 {
 	FStaticMeshSceneProxy::CreateRenderThreadResources();
 
+	// ++[D5] 
+	if (bUseLiteGPUScene)
+		return;
+	// --[D5]
+
 	const bool bCanUseGPUScene = UseGPUScene(GetScene().GetShaderPlatform(), GetScene().GetFeatureLevel());
 	
 	// Flush upload of GPU data for ISM/HISM
@@ -2534,6 +2539,9 @@ void FInstancedStaticMeshSceneProxy::SetupRayTracingDynamicInstances(int32 NumDy
 
 UInstancedStaticMeshComponent::UInstancedStaticMeshComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
+	// ++[D5] 
+	, bUseLiteGPUScene(false)
+	// --[D5]
 {
 	Mobility = EComponentMobility::Movable;
 	BodyInstance.bSimulatePhysics = false;
@@ -2880,6 +2888,11 @@ void UInstancedStaticMeshComponent::BuildRenderData(FStaticMeshInstanceData& Out
 
 void UInstancedStaticMeshComponent::InitInstanceBody(int32 InstanceIdx, FBodyInstance* InstanceBodyInstance)
 {
+	// ++[D5]
+	if (bUseLiteGPUScene)
+		return;
+	// --[D5]
+
 	if (!GetStaticMesh())
 	{
 		UE_LOG(LogStaticMesh, Warning, TEXT("Unabled to create a body instance for %s in Actor %s. No StaticMesh set."), *GetName(), GetOwner() ? *GetOwner()->GetName() : TEXT("?"));
@@ -2909,6 +2922,11 @@ void UInstancedStaticMeshComponent::InitInstanceBody(int32 InstanceIdx, FBodyIns
 
 void UInstancedStaticMeshComponent::CreateAllInstanceBodies()
 {
+	// ++[D5]
+	if (bUseLiteGPUScene)
+		return;
+	// --[D5]
+
 	TRACE_CPUPROFILER_EVENT_SCOPE(UInstancedStaticMeshComponent::CreateAllInstanceBodies);
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_UInstancedStaticMeshComponent_CreateAllInstanceBodies);
 	STAT(FScopeCycleCounter Context(StatId);)
@@ -3029,6 +3047,14 @@ void UInstancedStaticMeshComponent::ClearAllInstanceBodies()
 
 void UInstancedStaticMeshComponent::OnCreatePhysicsState()
 {
+	// ++[D5]
+	if (bUseLiteGPUScene)
+	{
+		USceneComponent::OnCreatePhysicsState();
+		return;
+	}
+	// --[D5]
+
 	TRACE_CPUPROFILER_EVENT_SCOPE(UInstancedStaticMeshComponent::OnCreatePhysicsState)
 	check(InstanceBodies.Num() == 0);
 
