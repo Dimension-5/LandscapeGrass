@@ -416,7 +416,7 @@ void FLiteGPUSceneBufferManager::ReleaseRHI()
 	FRenderResource::ReleaseRHI();
 }
 
-void FLiteGPUSceneBufferManager::UpdateUploader(FRHICommandList& RHICmdList, class FLiteGPUSceneInstanceData* InstanceDataPtr, int32 DirtyCount)
+void FLiteGPUSceneBufferManager::UpdateUploader(FRHICommandList& RHICmdList, class FLiteGPUSceneInstanceData* InstanceDataPtr, int32 CurrentFrameBufferIndex)
 {
 	SCOPE_CYCLE_COUNTER(STAT_ResourceUpload);
 	if (!InstanceDataPtr)
@@ -424,8 +424,9 @@ void FLiteGPUSceneBufferManager::UpdateUploader(FRHICommandList& RHICmdList, cla
 		return;
 	}
 
-	int32 DirtyBufferNum = DirtyCount;
-	const TArray<uint32>& InDirtyBuffer = InstanceDataPtr->UpdateDirtyInstanceIndices;
+	FLiteGPUSceneInstanceData::FrameData& CurrentFrameData = InstanceDataPtr->FrameBufferedData[CurrentFrameBufferIndex];
+	int32 DirtyBufferNum = CurrentFrameData.DirtyInstanceNum;
+	const TArray<uint32>& InDirtyBuffer = CurrentFrameData.UpdateDirtyInstanceIndices;
 
 	if (DirtyBufferNum <= 0)
 	{

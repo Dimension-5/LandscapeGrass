@@ -146,10 +146,7 @@ void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENa
 		{
 			return;
 		}
-		if (LiteGPUSceneComp->SharedPerInstanceData.IsValid())
-		{
-			LiteGPUSceneComp->SharedPerInstanceData->DirtyInstanceNum = 0;
-		}
+
 		if (LiteGPUSceneComp)
 		{
 			LiteGPUSceneComp->UpdateIncreasedGroup();

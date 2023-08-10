@@ -240,9 +240,6 @@ FLiteGPUSceneInstanceData::FLiteGPUSceneInstanceData()
 	RWInstancePatchNumBuffer = nullptr;
 	RWInstancePatchIDsBuffer = nullptr;
 	MeshAABBBuffer = nullptr;
-#if PLATFORM_WINDOWS
-	bUpdateFrame = false;
-#endif
 	CullingInstancedNum = 0;
 	AllInstanceIndexNum = 0;
 	PerPatchMaxNum = 0;
@@ -370,9 +367,6 @@ void FLiteGPUSceneInstanceData::InitInstanceData(class ULiteGPUSceneComponent* C
 	UploadInstanceFoliageTypeData.SetNum(MAX_BUFFER_ARRAY_NUM);
 	UploadInstancePatchIDs.SetNum(MAX_BUFFER_ARRAY_NUM * PerPatchMaxNum);
 	UploadInstancePatchNum.SetNum(MAX_BUFFER_ARRAY_NUM);
-#if PLATFORM_WINDOWS
-	UpdateDirtyInstanceIndices.SetNum(MAX_DIRTY_BUFFER_NUM);
-#else
 	for (uint32 i = 0; i < MAX_QUEUED_FRAME_COUNT; i++)
 	{
 		FrameBufferedData[i].UpdateDirtyInstanceIndices.SetNum(MAX_DIRTY_BUFFER_NUM);
@@ -380,7 +374,6 @@ void FLiteGPUSceneInstanceData::InitInstanceData(class ULiteGPUSceneComponent* C
 		FrameBufferedData[i].bUpdateFrame = false;
 	}
 	FrameBufferSelectionCounter = 0;
-#endif
 	InstancedKeyComponents.SetNum(MAX_BUFFER_ARRAY_NUM);
 
 	FLiteGPUSceneInstanceData* InitDataPtr = this;
@@ -442,37 +435,22 @@ void FLiteGPUSceneInstanceData::UpdateIncreasedData(class ULiteGPUSceneComponent
 			InstancedKeyComponents[InstanceIndex + LastInstancedIndicesNum] = Key;
 		}
 
-#if !PLATFORM_WINDOWS
 		FrameData& CurrentFrameData = FrameBufferedData[FrameBufferSelectionCounter];
-#endif
-
 		// Mark these instances as GPUDriven and Mark Dirty for updating
 		{
 			uint32 PreCompInstanceNum = Key->GPUDrivenInstanceIndices.Num();
 			Key->GPUDrivenInstanceIndices.SetNum(NewInstanceCount + PreCompInstanceNum, false);
 
-#if PLATFORM_WINDOWS
-			int32 LastDirtyInstanceIndex = DirtyInstanceNum;
-			DirtyInstanceNum += NewInstanceCount;
-
-			check(DirtyInstanceNum <= MAX_DIRTY_BUFFER_NUM);
-#else
 			int32 LastDirtyInstanceIndex = CurrentFrameData.DirtyInstanceNum;
 			CurrentFrameData.DirtyInstanceNum += NewInstanceCount;
 
 			check(CurrentFrameData.DirtyInstanceNum <= MAX_DIRTY_BUFFER_NUM);
-#endif
 
 			for (int32 Index = 0; Index < NewInstanceCount; Index++)
 			{
 				SCOPE_CYCLE_COUNTER(STAT_SetInstanceBuffer);
 				Key->GPUDrivenInstanceIndices[PreCompInstanceNum + Index] = LastInstancedIndicesNum + Index;
-
-#if PLATFORM_WINDOWS
-				UpdateDirtyInstanceIndices[LastDirtyInstanceIndex + Index] = LastInstancedIndicesNum + Index;
-#else
 				CurrentFrameData.UpdateDirtyInstanceIndices[LastDirtyInstanceIndex + Index] = LastInstancedIndicesNum + Index;
-#endif
 			}
 		}
 
@@ -508,11 +486,7 @@ void FLiteGPUSceneInstanceData::UpdateIncreasedData(class ULiteGPUSceneComponent
 			}
 		}
 
-#if PLATFORM_WINDOWS
-		bUpdateFrame = true;
-#else
 		CurrentFrameData.bUpdateFrame = true;
-#endif
 
 		//Update the offset
 		IncreasedOffsets[Key] += NewInstanceCount;
@@ -528,10 +502,7 @@ void FLiteGPUSceneInstanceData::UpdateRemoveData(class ULiteGPUSceneComponent* C
 		return;
 	}
 
-#if !PLATFORM_WINDOWS
 	FrameData& CurrentFrameData = FrameBufferedData[FrameBufferSelectionCounter];
-#endif
-
 	if (RemoveOffsets[Key] < Key->InstanceCount)
 	{
 		const auto RemoveOffset = RemoveOffsets[Key];
@@ -541,12 +512,7 @@ void FLiteGPUSceneInstanceData::UpdateRemoveData(class ULiteGPUSceneComponent* C
 		InstanceNum -= InstanceCountToRemove;
 		Comp->AllInstanceNum -= InstanceCountToRemove;
 
-#if PLATFORM_WINDOWS
-		int32 LastDirtyIndex = DirtyInstanceNum;
-#else
 		int32 LastDirtyIndex = CurrentFrameData.DirtyInstanceNum;
-#endif
-
 		for (int32 Index = 0; Index < InstanceCountToRemove; Index++)
 		{
 			SCOPE_CYCLE_COUNTER(STAT_RemoveDataMemorySwap);
@@ -578,15 +544,9 @@ void FLiteGPUSceneInstanceData::UpdateRemoveData(class ULiteGPUSceneComponent* C
 				LastComp->GPUDrivenInstanceIndices[IndexInLastComp] = RemovedIndex;
 				InstancedKeyComponents[RemovedIndex] = LastComp;
 
-#if PLATFORM_WINDOWS
-				DirtyInstanceNum++;
-				check(DirtyInstanceNum <= MAX_DIRTY_BUFFER_NUM);
-				UpdateDirtyInstanceIndices[LastDirtyIndex + Index] = RemovedIndex;
-#else
 				CurrentFrameData.DirtyInstanceNum++;
 				check(CurrentFrameData.DirtyInstanceNum <= MAX_DIRTY_BUFFER_NUM);
 				CurrentFrameData.UpdateDirtyInstanceIndices[LastDirtyIndex + Index] = RemovedIndex;
-#endif
 			}
 			Num--;
 		}
@@ -601,12 +561,7 @@ void FLiteGPUSceneInstanceData::UpdateRemoveData(class ULiteGPUSceneComponent* C
 				break;
 			}
 		}
-
-#if PLATFORM_WINDOWS
-		bUpdateFrame = true;
-#else
 		CurrentFrameData.bUpdateFrame = true;
-#endif
 		RemoveOffsets[Key] += InstanceCountToRemove;
 	}
 }
@@ -615,16 +570,10 @@ void FLiteGPUSceneInstanceData::UpdateInstanceData(ULiteGPUSceneComponent* Comp)
 {
 	SCOPE_CYCLE_COUNTER(STAT_UpdateInstanceData);
 
-#if !PLATFORM_WINDOWS
 	FrameData& CurrentFrameData = FrameBufferedData[FrameBufferSelectionCounter];
-#endif
 	if (!bInitialized)
 		return;
-#if PLATFORM_WINDOWS
-	if (!bUpdateFrame)
-#else
 	if (!CurrentFrameData.bUpdateFrame)
-#endif
 		return;
 
 	AllInstanceIndexNum = 0;
@@ -634,20 +583,21 @@ void FLiteGPUSceneInstanceData::UpdateInstanceData(ULiteGPUSceneComponent* Comp)
 	}
 
 	FLiteGPUSceneInstanceData* InitDataPtr = this;
-	auto* pBufferManager = Comp->GetGPUDrivenBufferManager();
+	FLiteGPUSceneBufferManagerInterface* pBufferManager = Comp->GetGPUDrivenBufferManager();
 	CulledAllPatchNum = AllPatches.Num();
 
-	int32 DirtyCount = DirtyInstanceNum;
+	uint32 FrameIndex = FrameBufferSelectionCounter;
+
 	ENQUEUE_RENDER_COMMAND(UpdateInstanceDataRenderingThread)(
-		[DirtyCount, InitDataPtr, pBufferManager](FRHICommandList& RHICmdList)
+		[FrameIndex, InitDataPtr, pBufferManager](FRHICommandList& RHICmdList)
 		{
 			if (pBufferManager)
 			{
-				pBufferManager->UpdateUploader(RHICmdList, InitDataPtr, DirtyCount);
+				pBufferManager->UpdateUploader(RHICmdList, InitDataPtr, FrameIndex);
 			}
 		}
 	);
-	bUpdateFrame = false;
+	CurrentFrameData.bUpdateFrame = false;
 }
 
 

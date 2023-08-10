@@ -337,12 +337,13 @@ public:
 	 */
 	TArray<uint8> PatchAABBData;
 
-	/*
-	 *  The Indices of the instance that are dirty
-	*/
-	TArray<uint32> UpdateDirtyInstanceIndices;
-
-	int32 DirtyInstanceNum;
+	struct FrameData
+	{
+		TArray<uint32> UpdateDirtyInstanceIndices;
+		int32 DirtyInstanceNum;
+		bool bUpdateFrame;
+	} FrameBufferedData[MAX_QUEUED_FRAME_COUNT];
+	uint32 FrameBufferSelectionCounter;
 
 	int32 InstanceNum;
 	int32 FoliageTypeNum;
@@ -380,12 +381,6 @@ public:
 	 * Array that stores the corresponding HISM of the Instance at Index k
 	 */
 	TArray<class UHierarchicalInstancedStaticMeshComponent*> InstancedKeyComponents;
-
-	/*
-	 * Is it ok now to update on this frame
-	 * This is not expected to modify by others
-	 */
-	bool bUpdateFrame;
 
 	int32 AllInstanceIndexNum;
 	/*
