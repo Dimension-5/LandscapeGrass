@@ -95,7 +95,8 @@ class UInstancedStaticMeshComponent : public UStaticMeshComponent, public ISMIns
 	ENGINE_API virtual ~UInstancedStaticMeshComponent();
 	
 	/** Array of instances, bulk serialized. */
-	UPROPERTY(EditAnywhere, SkipSerialization, DisplayName="Instances", Category=Instances, meta=(MakeEditWidget=true, EditFixedOrder))
+	// UPROPERTY(EditAnywhere, SkipSerialization, DisplayName="Instances", Category=Instances, meta=(MakeEditWidget=true, EditFixedOrder))
+	UPROPERTY(SkipSerialization)
 	TArray<FInstancedStaticMeshInstanceData> PerInstanceSMData;
 	
 	// TODO: KevinO cleanup
