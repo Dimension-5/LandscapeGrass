@@ -88,8 +88,7 @@ void FLiteGPUScene::FillMeshLODSectionData(int32 LodIndex, const FStaticMeshRend
 	OutVertexCount = RawVertices.Num();
 }
 
-
-void FLiteGPUScene::ConstructCombinedVertices(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
+void FLiteGPUScene::ConstructCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
 {
 	CombinedData.Materials.Empty();
 	CombinedData.SectionsMap.Empty();
@@ -142,4 +141,46 @@ void FLiteGPUScene::ConstructCombinedVertices(const TArray<TObjectPtr<UStaticMes
 			}
 		}
 	}
+	// A safety check
+	for (uint32 Index : CombinedData.Indices)
+	{
+		check((int32)Index < CombinedData.Vertices.Num());
+	}	
+	// Collect render sections
+	for (auto& [K, V] : CombinedData.SectionsMap)
+	{
+		for (auto& Patch : V)
+		{
+			Patch.PatchID = SectionInfos.Num();
+			SectionInfos.Add(Patch);
+		}
+	}
+	// Calculate teh max lod numbers among all meshes
+	for (UStaticMesh* StaticMesh : AllSourceMeshes)
+	{
+		if (StaticMesh)
+		{
+			if (FStaticMeshRenderData* MeshRenderData = StaticMesh->GetRenderData())
+			{
+				PerSectionMaxNum = FMath::Max(PerSectionMaxNum, MeshRenderData->LODResources.Num());
+			}
+		}
+	}
+	// Another safety check
+	for (auto& SectionInfo : SectionInfos)
+	{
+		check(SectionInfo.FirstVertexOffset + SectionInfo.VertexCount <= (uint32)CombinedData.Vertices.Num());
+		check(SectionInfo.FirstIndexOffset + SectionInfo.IndexCount <= (uint32)CombinedData.Indices.Num());
+	}
+}
+
+void FLiteGPUScene::ConstructCombinedBuffers(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
+{
+
+}
+
+void FLiteGPUScene::ConstructCombinedVertices(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
+{
+	ConstructCombinedData(AllSourceMeshes);
+	ConstructCombinedBuffers(AllSourceMeshes);
 }

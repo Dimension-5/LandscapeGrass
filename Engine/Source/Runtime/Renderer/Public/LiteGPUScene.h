@@ -65,9 +65,47 @@ struct FLiteGPUCombinedData
 	TMap<int32, TArray<FLiteGPUSceneMeshSectionInfo>> SectionsMap;
 };
 
+struct FLiteGPUSceneMeshVertexBuffer final : public FVertexBuffer
+{
+	void InitRHI(FRHICommandListBase& RHICmdList);
+
+	TArray<FLiteGPUSceneMeshVertex> Vertices;
+	int32 VerticesNum;
+};
+
+struct FLiteGPUSceneMeshIndexBuffer final : public FIndexBuffer
+{
+	void InitRHI(FRHICommandListBase& RHICmdList);
+
+	TArray<uint32> Indices;
+	int32 IndicesNum;
+};
+
 struct FLiteGPUCombinedBuffer
 {
-	FVertexBuffer* pInstanceIndexVertexBuffer;
+public:
+	FLiteGPUCombinedBuffer()
+		: VertexBuffer(nullptr), IndexBuffer(nullptr)
+		, UsedBytes(0), VertexNum(0)
+		, IndiceNum(0), bIntialized(false)
+	{
+
+	}
+
+	~FLiteGPUCombinedBuffer()
+	{
+		Release_RenderingThread();
+	}
+
+	void InitCombinedBuffers(const TArray<FLiteGPUSceneMeshVertex>& Vertices, const TArray<uint32>& Indices);
+	void Release_RenderingThread();
+
+	FLiteGPUSceneMeshVertexBuffer* VertexBuffer;
+	FLiteGPUSceneMeshIndexBuffer* IndexBuffer;
+	uint64 UsedBytes;
+	uint32 VertexNum;
+	uint32 IndiceNum;
+	bool bIntialized;
 };
 
 struct FLiteGPUCounterBuffers
@@ -204,8 +242,12 @@ struct RENDERER_API FLiteGPUScene
 public:
 	FLiteGPUScene();
 	~FLiteGPUScene();
-
 	void ConstructCombinedVertices(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
+
+protected:
+	void ConstructCombinedData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
+	void ConstructCombinedBuffers(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
+
 	void FillMeshLODSectionData(int32 LodIndex, const FStaticMeshRenderData* MeshRenderData, 
 		const FStaticMeshLODResources& LODResource, const FStaticMeshSection& RenderSection, 
 		TArray<FLiteGPUSceneMeshVertex>& OutCombinedVertexBufferData, TArray<uint32>& OutCombinedIndiceBufferData, 
@@ -213,6 +255,8 @@ public:
 		uint32& OutFirstIndexOffset, uint32& OutIndicesCount, 
 		float& OutScreenSizeMin, float& OutScreenSizeMax);
 
+	int32 PerSectionMaxNum;
+	TArray<FLiteGPUSceneMeshSectionInfo> SectionInfos;
 	TArray<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
 	TArray<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
 	TArray<FVector2D> InstanceZWOffsets; // [Z-Offset, TileIndex]
