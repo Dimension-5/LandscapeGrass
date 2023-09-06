@@ -147,12 +147,137 @@ public:
 	FVector2f TextureSecondCoordinate;
 };
 
-struct RENDERER_API FLiteGPUCombinedData
+struct FLiteGPUCombinedData
 {
 	TArray<uint32> Indices;
 	TArray<FLiteGPUSceneMeshVertex> Vertices;
 	TArray<TObjectPtr<UMaterialInterface>> Materials;
 	TMap<int32, TArray<FLiteGPUSceneMeshSectionInfo>> SectionsMap;
+};
+
+struct FLiteGPUSceneProxyData
+{
+	int32 TotalSectionNum = 0;
+	bool bInitialized = false;
+
+	// GPU Culling
+	FVertexBuffer* pInstanceIndexVertexBuffer;
+	FRDGBufferHandle RWIndirectDrawDispatchIndiretBuffer;
+	FRDGBufferHandle RWInstanceIndiceBuffer;
+	FRDGBufferHandle RWIndirectDrawBuffer;
+	FRDGBufferHandle RWGPUUnCulledInstanceBuffer;
+	FRDGBufferHandle RWGPUUnCulledInstanceScreenSize;
+	FRDGBufferHandle RWGPUUnCulledInstanceNum;
+	FRDGBufferHandle RWDispatchStagingBuffer;
+	FRDGBufferHandle RWGPUUnCulledInstanceIndirectParameters;
+
+	FConvexVolume ViewFrustum;
+	FVector3f ViewLocation;
+	FVector3f ViewForward;
+	FMatrix44f ProjMatrix;
+	FSphere3f ShadowBounds;
+	int32 MaxGPUInstanceToDraw;
+	bool bGPUCulling;
+	bool bDirty;
+	bool bFirstGPUCullinged;
+	bool bCreateImposterBuffer;
+	uint32 GPUByte;
+	int32 PerSectionMaxNum;
+};
+
+struct FLiteGPURenderData
+{
+	FRDGBufferHandle AllSectionInfoBuffer;
+	FRDGBufferHandle RWSectionCountBuffer;
+	/*
+	 * Since it's instancing , A section might be drawed multiple times
+	 * This buffer stores the draw number of each section (section at certain lod)
+	 * SectionCount(SectionID) = RWSectionCountCopyBuffer[SectionID]
+	 */
+	FRDGBufferHandle RWSectionCountCopyBuffer;
+	/*
+	 * Since it's instancing , A section might be drawed multiple times
+	 * We organize the draw of same section together and close
+	 * This buffer stores the starting offset of one type of section
+	 * SectionStartOffset(SectionID) =RWSectionCountOffsetBuffer[SectionID]
+	 *
+	 * Therefore, the data we need to draw a section of "SectionID" locates at
+	 * [SectionStartOffset(SectionID),SectionStartOffset(SectionID)+SectionCount(SectionID)]
+	 */
+	FRDGBufferHandle RWSectionCountOffsetBuffer;
+	/*
+	 * This buffer is a size-1 uint which helps calculate the SectionStartOffset
+	 *
+	 *		uint SectionStartOffset;
+	 *		InterlockedAdd(RWNextSectionhCountOffsetBuffer[0], SectionCount, SectionStartOffset);
+	 *		RWSectionCountOffsetBuffer[UniqueID] = SectiontartOffset;
+	 *
+	 */
+	FRDGBufferHandle RWNextSectionCountOffsetBuffer;
+	FRDGBufferHandle RWDrawedTriangleCountBuffer;
+	FRDGBufferHandle MeshAABBBuffer;
+	/*
+	 * This Buffer stores the instance id of section draw
+	 * InstanceID(SectionID,i-th draw) = RWInstanceIndiceBuffer[SectionStartOffset(SectionID)+i]
+	 */
+	FRDGBufferHandle RWGPUInstanceIndicesBuffer;
+	FRDGBufferHandle RWInstanceScaleBuffer;
+	FRDGBufferHandle RWInstanceTransformBuffer;
+	FRDGBufferHandle RWInstanceTypeBuffer;
+	FRDGBufferHandle RWInstanceSectionNumBuffer;
+	FRDGBufferHandle RWInstanceSectionIDsBuffer;
+	TArray<float> UploadInstanceScaleData;
+	TArray<FVector4f> UploadInstanceTransformData;
+	TArray<uint8> UploadInstanceFoliageTypeData;
+	/*
+	 * Array which  stores the AAbb data of the foliages,
+	 * the length is equal foliage_num x 2 x sizeof(Vector4),
+	 * 2 stands for the BottomLeft and Top Right Pos of the AABB box
+	 */
+	TArray<uint8> SectionAABBData;
+	/*
+	 *  The Indices of the instance that are dirty
+	*/
+	TArray<uint32> UpdateDirtyInstanceIndices;
+	int32 DirtyInstanceNum;
+	int32 InstanceNum;
+	int32 FoliageTypeNum;
+	int32 AllSectionNum;
+	uint32 CullingInstancedNum;
+	int32 CulledAllSectionNum;
+
+	TArray<FLiteGPUSceneMeshSectionInfo> SectionInfos;
+	/*
+	 * Array the stores the ids of section on Instance k that needed to be upload
+	 * The length is  PerSectionMaxNum x len(instances_to_upload)
+	 */
+	TArray<uint8> UploadInstanceSectionIDs;
+	/*
+	 * Array the stores the num of Section on Instance k that needed to be upload
+	 * The length is a multiplier of PerSectionMaxNum
+	 */
+	TArray<uint8> UploadInstanceSectionNum;
+	/*
+	 * Number of instances that references the section
+	 */
+	TArray<int32> SectionInstanceNum;
+	/*
+	 * Array which  stores Mesh Index of each section,
+	 * the length is equal foliage_num x lod_num x section_num
+	 */
+	TArray<int32> SectionInfoMeshIndices;
+	uint32 GPUByteCount;
+	/*
+	 * Is it ok now to update on this frame
+	 * This is not expected to modify by others
+	 */
+	bool bUpdateFrame;
+	int32 AllInstanceIndexNum;
+	/*
+	 * Actually, this stores the max lod numbers among the gpu scene meshes
+	 */
+	int32 PerSectionMaxNum;
+	bool bInitialized;
 };
 
 struct RENDERER_API FLiteGPUScene
@@ -169,8 +294,6 @@ public:
 		uint32& OutFirstIndexOffset, uint32& OutIndicesCount, 
 		float& OutScreenSizeMin, float& OutScreenSizeMax);
 
-	FLiteGPUCombinedData CombinedData;
-
 	// [PivotX, PivotY]
 	TArray<FInt32Vector2> TilesPositions;
 	// [X-Offset, Y-Offset]
@@ -179,4 +302,8 @@ public:
 	TArray<FVector2D> InstanceZWOffsets;
 	// [X-Rotation, Y-Rotation, Z-Rotation, Scale]
 	TArray<FLiteGPUHalf4> InstanceRotationScales;
+
+	FLiteGPUCombinedData CombinedData;
+	FLiteGPUSceneProxyData ProxyData;
+	FLiteGPURenderData RenderData;
 };
