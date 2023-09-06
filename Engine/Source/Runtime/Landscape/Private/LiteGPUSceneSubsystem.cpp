@@ -27,9 +27,11 @@ void ULiteGPUSceneSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("BuildLiteGPUScenes"),
 		TEXT("build lite gpu scenes data."),
-		FConsoleCommandWithWorldArgsAndOutputDeviceDelegate::CreateLambda([](const TArray<FString>& Args, UWorld*, FOutputDevice& Ar)
+		FConsoleCommandWithWorldArgsAndOutputDeviceDelegate::CreateLambda(
+			[](const TArray<FString>& Args, UWorld* World, FOutputDevice& Ar)
 			{
-				ULiteGPUSceneSubsystem::Get().BuildLiteGPUScenes();
+				auto Subsystem = GEngine->GetEngineSubsystem<ULiteGPUSceneSubsystem>();
+				Subsystem->BuildLiteGPUScenes();
 			}),
 		ECVF_Cheat);
 }
@@ -60,8 +62,8 @@ ALiteGPUSceneManager* ALiteGPUSceneManager::Get(const UObject* WorldContext)
 void ALiteGPUSceneManager::PreRegisterAllComponents()
 {
 	Super::PreRegisterAllComponents();
-	GLiteGPUSceneManagers.FindOrAdd(GetWorld(), this);
 
+	GLiteGPUSceneManagers.FindOrAdd(GetWorld(), this);
 	// Register Tick 
 	TickFunction.Manager = this;
 	TickFunction.bCanEverTick = true;
@@ -78,6 +80,7 @@ void ALiteGPUSceneManager::UnregisterAllComponents(bool bForReregister)
 	{
 		GLiteGPUSceneManagers.Remove(GetWorld());
 	}
+
 	Super::UnregisterAllComponents(bForReregister);
 }
 
@@ -85,8 +88,24 @@ void ALiteGPUSceneManager::BuildLiteGPUScene()
 {
 	const auto StartTime = FDateTime::UtcNow();
 
+	// Glob all components
+	Components.Empty();
+	for (TObjectIterator<ULiteGPUSceneComponent> Itr; Itr; ++Itr)
+	{
+		auto Component = *Itr;
+		if (!Component->IsTemplate())
+		{
+			Components.AddUnique(*Itr);
+		}
+	}
+
 	// Build combined vb/ib data here
-	// Scene->ConstructCombinedVertices(Components);
+	TArray<TObjectPtr<UStaticMesh>> Meshes;
+	for (auto Component : Components)
+	{
+		Meshes.AddUnique(Component->GetUnderlyingMesh());
+	}
+	Scene.ConstructCombinedVertices(Meshes);
 
 	const auto Elapsed = FDateTime::UtcNow() - StartTime;
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Lite GPU scene build finished in %d milliseconds"), Elapsed.GetTotalMilliseconds());

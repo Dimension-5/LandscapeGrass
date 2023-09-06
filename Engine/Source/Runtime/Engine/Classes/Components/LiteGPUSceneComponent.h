@@ -28,6 +28,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LiteGPUScene")
 	virtual bool ClearInstances();
+
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+
+	TObjectPtr<class UStaticMesh> GetUnderlyingMesh() { return StaticMesh; }
+
 private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = StaticMesh, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UStaticMesh> StaticMesh;

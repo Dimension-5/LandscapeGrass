@@ -1,4 +1,5 @@
 #include "Components/LiteGPUSceneComponent.h"
+#include "LiteGPUSceneSubsystem.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All);
 
@@ -26,4 +27,14 @@ bool ULiteGPUSceneComponent::RemoveInstances(const TArray<int32>& InstancesToRem
 bool ULiteGPUSceneComponent::ClearInstances()
 {
 	return true;
+}
+
+void ULiteGPUSceneComponent::OnRegister()
+{
+	Super::OnRegister();
+}
+
+void ULiteGPUSceneComponent::OnUnregister()
+{
+	Super::OnUnregister();
 }

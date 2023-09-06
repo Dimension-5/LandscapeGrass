@@ -1,17 +1,19 @@
 // Copyright D5, Inc. All Rights Reserved.
 #pragma once
+#include "LiteGPUScene.h"
 #include "Subsystems/EngineSubsystem.h"
 #include "LiteGPUSceneSubsystem.generated.h"
 
 class ULiteGPUSceneComponent;
-class UHierarchicalInstancedStaticMeshComponent;
 class ULiteGPUSceneSubsystem;
-using HISMComponent = UHierarchicalInstancedStaticMeshComponent;
-using HISMArray = TArray<HISMComponent*>;
+class ALiteGPUSceneManager;
 
 struct FLiteGPUSceneSubsystemTickFunction : public FTickFunction
 {
-	FLiteGPUSceneSubsystemTickFunction() {}
+	FLiteGPUSceneSubsystemTickFunction()
+		: FTickFunction(), Manager(nullptr)
+	{
+	}
 	virtual ~FLiteGPUSceneSubsystemTickFunction() {}
 
 	// Begin FTickFunction overrides
@@ -20,36 +22,35 @@ struct FLiteGPUSceneSubsystemTickFunction : public FTickFunction
 	virtual FName DiagnosticContext(bool bDetailed) override;
 	// End FTickFunction overrides
 
-	class ALiteGPUSceneManager* Manager;
+	ALiteGPUSceneManager* Manager = nullptr;
 };
 
 UCLASS()
-class RENDERER_API ULiteGPUSceneSubsystem : public UEngineSubsystem
+class LANDSCAPE_API ULiteGPUSceneSubsystem : public UEngineSubsystem
 {
 	GENERATED_BODY()
 public:
-	//~UEngineSubsystem interface
+	//~ UEngineSubsystem interface
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
-	//~End of UEngineSubsystem interface
-
-	static ULiteGPUSceneSubsystem& Get() { return *GEngine->GetEngineSubsystem<ULiteGPUSceneSubsystem>(); }
+	//~ End of UEngineSubsystem interface
 
 	void BuildLiteGPUScenes();
 };
 
 UCLASS(BlueprintType, Blueprintable, hidecategories = (Collision, Brush, Attachment, Physics, Volume))
-class RENDERER_API ALiteGPUSceneManager : public AActor
+class LANDSCAPE_API ALiteGPUSceneManager : public AActor
 {
 	GENERATED_BODY()
 public:
 	UFUNCTION(BlueprintPure, meta = (WorldContext = WorldContext), Category = "ALiteGPUSceneManager")
 	static ALiteGPUSceneManager* Get(const UObject* WorldContext);
-
-	void BuildLiteGPUScene();
-
+	
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "ALiteGPUSceneManager")
 	TArray<TObjectPtr<ULiteGPUSceneComponent>> Components;
+
+	void BuildLiteGPUScene();
+	FLiteGPUScene Scene;
 private:
 	virtual void PreRegisterAllComponents() override;
 	virtual void UnregisterAllComponents(bool bForReregister = false) override;
