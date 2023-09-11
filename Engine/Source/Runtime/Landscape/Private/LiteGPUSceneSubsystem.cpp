@@ -1,6 +1,15 @@
 #include "LiteGPUSceneSubsystem.h"
+#include "RenderGraphBuilder.h"
 #include "Components/LiteGPUSceneComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
+
+static int sDisplayLiteGPUScene = 1;
+static FAutoConsoleVariableRef CVarDrawLiteGPUScene(
+	TEXT("r.LiteGPUScene.Enable"),
+	sDisplayLiteGPUScene,
+	TEXT(" Display GPUDriven Scene.\n"),
+	ECVF_Scalability
+);
 
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All)
 static TMap<UWorld*, ALiteGPUSceneManager*> GLiteGPUSceneManagers;
@@ -105,7 +114,9 @@ void ALiteGPUSceneManager::BuildLiteGPUScene()
 	{
 		Meshes.AddUnique(Component->GetUnderlyingMesh());
 	}
-	Scene.ConstructScene(Meshes);
+
+	Scene = MakeShared<FLiteGPUScene>();
+	Scene->BuildScene(Meshes);
 
 	const auto Elapsed = FDateTime::UtcNow() - StartTime;
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Lite GPU scene build finished in %d milliseconds"), Elapsed.GetTotalMilliseconds());
@@ -119,6 +130,16 @@ void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENa
 	bool bEnableLiteGPUScene = CVarEnable ? CVarEnable->GetInt() > 0 : false;
 	if (bEnableLiteGPUScene)
 	{
+		ENQUEUE_RENDER_COMMAND(UpdateLiteGPUScene)(
+			[this](FRHICommandListImmediate& RHICmdList)
+			{
+				if (Scene.IsValid())
+				{
+					FRDGBuilder GraphBuilder(RHICmdList);
+					Scene->UpdateScene(GraphBuilder);
+					GraphBuilder.Execute();
+				}
+			});
 		for (auto Component : Components)
 		{
 			Component->ManagedTick(DeltaTime);

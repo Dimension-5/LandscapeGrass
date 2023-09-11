@@ -173,7 +173,7 @@ struct FLiteGPUSceneUpdate
 	TArray<uint32> InstanceIndices; // The Indices of the instance that are dirty
 	TArray<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
 	TArray<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
-	TArray<FVector2D> InstanceZWOffsets; // [Z-Offset, TileIndex]
+	TArray<FVector2f> InstanceZWOffsets; // [Z-Offset, TileIndex]
 	TArray<FLiteGPUHalf4> InstanceRotationScales; // [X-Rotation, Y-Rotation, Z-Rotation, Scale]
 	TArray<uint8> InstanceTypes;
 	TArray<uint8> InstanceSectionIDs;
@@ -184,6 +184,7 @@ struct FLiteGPUSceneActive
 {
 	TArray<int32> SectionInstanceNums; // Number of instances that references the section
 	int32 InstanceNum = 0;
+	int32 InstanceCapacity = 2048 * 1024;
 	bool bUpdateFrame = false;
 };
 
@@ -211,21 +212,20 @@ struct FLiteGPUSceneData
 	FLiteGPUSceneActive Active;
 };
 
-struct FLiteGPUSceneBuffers
+struct FLiteGPUBufferState
 {
-	TRefCountPtr<FRDGPooledBuffer> AllSectionInfoBuffer;
-	// TRefCountPtr<FRDGPooledBuffer> RWDrawedTriangleCountBuffer;
-	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
-	/*
-	 * This Buffer stores the instance id of section draw
-	 * InstanceID(SectionID,i-th draw) = RWInstanceIndiceBuffer[SectionStartOffset(SectionID)+i]
-	 */
-	TRefCountPtr<FRDGPooledBuffer> RWGPUInstanceIndicesBuffer;
-	TRefCountPtr<FRDGPooledBuffer> RWInstanceScaleBuffer;
-	TRefCountPtr<FRDGPooledBuffer> RWInstanceTransformBuffer;
-	TRefCountPtr<FRDGPooledBuffer> RWInstanceTypeBuffer;
-	TRefCountPtr<FRDGPooledBuffer> RWInstanceSectionNumBuffer;
-	TRefCountPtr<FRDGPooledBuffer> RWInstanceSectionIDsBuffer;
+	FRDGBuffer* SectionInfoBuffer = nullptr;
+	FRDGBuffer* MeshAABBBuffer = nullptr;
+
+	FRDGBuffer* InstanceIndicesBuffer = nullptr;
+	FRDGBuffer* InstanceTypeBuffer = nullptr;
+	FRDGBuffer* InstanceSectionNumBuffer = nullptr;
+	FRDGBuffer* InstanceSectionIDsBuffer = nullptr;
+
+	FRDGBuffer* InstanceTilePosBuffer = nullptr;
+	FRDGBuffer* InstanceXYBuffer = nullptr;
+	FRDGBuffer* InstanceZWBuffer = nullptr;
+	FRDGBuffer* InstanceRotScaleBuffer = nullptr;
 };
 
 struct RENDERER_API FLiteGPUScene
@@ -233,20 +233,25 @@ struct RENDERER_API FLiteGPUScene
 public:
 	FLiteGPUScene();
 	~FLiteGPUScene();
-	void ConstructScene(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
+	void BuildScene(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
+	void UpdateScene(FRDGBuilder& GraphBuilder);
 
 protected:
-	void ConstructCombinedData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
-	void ConstructSceneData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
+	void buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
+	void buildSceneData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 
-	void FillMeshLODSectionData(int32 LodIndex, const FStaticMeshRenderData* MeshRenderData, 
+	void updateSectionInfos(FRDGBuilder& GraphBuilder);
+	void updateAABBData(FRDGBuilder& GraphBuilder);
+	void updateInstanceData(FRDGBuilder& GraphBuilder);
+
+	void fillMeshLODSectionData(int32 LodIndex, const FStaticMeshRenderData* MeshRenderData, 
 		const FStaticMeshLODResources& LODResource, const FStaticMeshSection& RenderSection, 
 		TArray<FLiteGPUSceneMeshVertex>& OutCombinedVertexBufferData, TArray<uint32>& OutCombinedIndiceBufferData, 
 		uint32& OutFirstVertexOffset, uint32& OutVertexCount, 
 		uint32& OutFirstIndexOffset, uint32& OutIndicesCount, 
 		float& OutScreenSizeMin, float& OutScreenSizeMax);
 
-	int32 PerSectionMaxNum;
+	int32 PerSectionMaxNum = 0;
 	TArray<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
 	TArray<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
 	TArray<FVector2D> InstanceZWOffsets; // [Z-Offset, TileIndex]
@@ -257,8 +262,21 @@ protected:
 	FLiteGPUViewData ViewData;
 
 	FLiteGPUCombinedBuffer CombinedBuffer;
-	FLiteGPUSceneBuffers SceneBuffers;
+	TRefCountPtr<FRDGPooledBuffer> SectionInfoBuffer;
+	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
+
+	TRefCountPtr<FRDGPooledBuffer> InstanceIndicesBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceTypeBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceSectionNumBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceSectionIDsBuffer;
+
+	TRefCountPtr<FRDGPooledBuffer> InstanceTilePosBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceXYBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceZWBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceRotScaleBuffer;
+
 	FLiteGPUViewBuffers ViewBuffers;
+	FLiteGPUBufferState BufferState;
 	
 	FLiteGPUCounterBuffers CounterBuffers;
 };

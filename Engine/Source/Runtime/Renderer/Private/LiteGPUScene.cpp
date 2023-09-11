@@ -1,6 +1,9 @@
 #include "LiteGPUScene.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All);
+
 FLiteGPUScene::FLiteGPUScene()
+	: PerSectionMaxNum(0)
 {
 
 }
@@ -10,7 +13,7 @@ FLiteGPUScene::~FLiteGPUScene()
 
 }
 
-void FLiteGPUScene::FillMeshLODSectionData(int32 LodIndex, const FStaticMeshRenderData* MeshRenderData, 
+void FLiteGPUScene::fillMeshLODSectionData(int32 LodIndex, const FStaticMeshRenderData* MeshRenderData, 
 	const FStaticMeshLODResources& LODResource, const FStaticMeshSection& RenderSection, 
 	TArray<FLiteGPUSceneMeshVertex>& OutCombinedVertexBufferData, TArray<uint32>& OutCombinedIndiceBufferData, 
 	uint32& OutFirstVertexOffset, uint32& OutVertexCount, 
@@ -88,7 +91,7 @@ void FLiteGPUScene::FillMeshLODSectionData(int32 LodIndex, const FStaticMeshRend
 	OutVertexCount = RawVertices.Num();
 }
 
-void FLiteGPUScene::ConstructCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
+void FLiteGPUScene::buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
 {
 	CombinedData.Materials.Empty();
 	CombinedData.SectionsMap.Empty();
@@ -113,7 +116,7 @@ void FLiteGPUScene::ConstructCombinedData(const TArray<TObjectPtr<UStaticMesh>> 
 					SectionInfo.SectionIndex = SectionIndex;
 					SectionInfo.LODIndex = LODIndex;
 					SectionInfo.MeshIndex = MeshIndex;
-					FillMeshLODSectionData(
+					fillMeshLODSectionData(
 						LODIndex
 						, MeshRenderData
 						, LODResource
@@ -150,7 +153,7 @@ void FLiteGPUScene::ConstructCombinedData(const TArray<TObjectPtr<UStaticMesh>> 
 	CombinedBuffer.Initialize(CombinedData.Vertices, CombinedData.Indices);
 }
 
-void FLiteGPUScene::ConstructSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
+void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
 {
 	SceneData.SourceMeshes = AllSourceMeshes;
 	for (auto& [K, V] : CombinedData.SectionsMap)
@@ -217,23 +220,153 @@ void FLiteGPUScene::ConstructSceneData(const TArray<TObjectPtr<UStaticMesh>> All
 	}
 	SceneData.SectionAABBData.SetNum(2 * sizeof(FVector4f) * SceneData.InstanceTypeNum);
 	FMemory::Memcpy(SceneData.SectionAABBData.GetData(), AABBs.GetData(), 2 * SceneData.InstanceTypeNum * sizeof(FVector4f));
-	// Do upload
 }
 
-void FLiteGPUScene::ConstructScene(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
+void FLiteGPUScene::BuildScene(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
 {
-	// CombinedData
-	ConstructCombinedData(AllSourceMeshes);
-	// SceneData
-	ConstructSceneData(AllSourceMeshes);
+	buildCombinedData(AllSourceMeshes);
+	buildSceneData(AllSourceMeshes);
+}
+
+void FLiteGPUScene::updateSectionInfos(FRDGBuilder& GraphBuilder)
+{
+	TResourceArray<FVector4f, VERTEXBUFFER_ALIGNMENT> SectionInfoBufferArray;
+	SectionInfoBufferArray.SetNumUninitialized(SceneData.TotalSectionNum * 2);
+	for (int32 SectionIndex = 0; SectionIndex < SceneData.TotalSectionNum; SectionIndex++)
+	{
+		const FLiteGPUSceneMeshSectionInfo& SectionInfo = SceneData.SectionInfos[SectionIndex];
+		SectionInfoBufferArray[2 * SectionIndex + 0] = FVector4f(SectionInfo.FirstIndexOffset, SectionInfo.IndexCount, SectionInfo.FirstVertexOffset, SectionInfo.VertexCount);
+		SectionInfoBufferArray[2 * SectionIndex + 1] = FVector4f(SectionInfo.ScreenSizeMin, SectionInfo.ScreenSizeMax, SectionInfo.MeshIndex, SectionInfo.MaterialIndex);
+	}
+	FResizeResourceSOAParams ResizeParams;
+	ResizeParams.NumBytes = SceneData.TotalSectionNum * 2 * sizeof(FVector4f);
+	ResizeParams.NumArrays = SceneData.TotalSectionNum * 2;
+	BufferState.SectionInfoBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, SectionInfoBuffer, ResizeParams, TEXT("LiteGPUScene.SectionInfo"));
+}
+
+void FLiteGPUScene::updateAABBData(FRDGBuilder& GraphBuilder)
+{
+	TResourceArray<FVector4f, VERTEXBUFFER_ALIGNMENT> AABBArray;
+	AABBArray.SetNumUninitialized(SceneData.InstanceTypeNum * 2);
+	FResizeResourceSOAParams ResizeParams;
+	ResizeParams.NumBytes = SceneData.InstanceTypeNum * 2 * sizeof(FVector4f);
+	ResizeParams.NumArrays = SceneData.InstanceTypeNum * 2;
+	BufferState.MeshAABBBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, MeshAABBBuffer, ResizeParams, TEXT("LiteGPUScene.AABB"));
+}
+
+void FLiteGPUScene::updateInstanceData(FRDGBuilder& GraphBuilder)
+{
+	const auto InstanceCapacity = SceneData.Active.InstanceCapacity;
+
+	const auto IndicesSize = InstanceCapacity * sizeof(int32);
+	BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceIndicesBuffer, IndicesSize, TEXT("LiteGPUScene.Scales"));
+
+	const auto TypesSize = InstanceCapacity * sizeof(int8);
+	BufferState.InstanceTypeBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceTypeBuffer, TypesSize, TEXT("LiteGPUScene.Types"));
+		
+	const auto SectionNumsSize = InstanceCapacity * sizeof(uint8);
+	BufferState.InstanceSectionNumBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceSectionNumBuffer, SectionNumsSize, TEXT("LiteGPUScene.SectionNums"));
+		
+	const auto SectionIDsSize = InstanceCapacity * sizeof(uint8);
+	BufferState.InstanceSectionIDsBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceSectionIDsBuffer, SectionIDsSize, TEXT("LiteGPUScene.SectionIDs"));
+		
+	// TRANSFORMS
+
+	const auto TilePosesSize = InstanceCapacity * sizeof(FInt32Vector2);
+	BufferState.InstanceTilePosBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceTilePosBuffer, TilePosesSize, TEXT("LiteGPUScene.TilePoses"));
+
+	const auto XYsSize = InstanceCapacity * sizeof(FLiteGPUHalf2);
+	BufferState.InstanceXYBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceXYBuffer, XYsSize, TEXT("LiteGPUScene.InstanceXYs"));
+	
+	const auto ZWsSize = InstanceCapacity * sizeof(FVector2f);
+	BufferState.InstanceZWBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceZWBuffer, ZWsSize, TEXT("LiteGPUScene.InstanceZWs"));
+	
+	const auto RotScalesSize = InstanceCapacity * sizeof(FLiteGPUHalf4);
+	BufferState.InstanceRotScaleBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceRotScaleBuffer, RotScalesSize, TEXT("LiteGPUScene.InstanceRotScales"));
+}
+
+void FLiteGPUScene::UpdateScene(FRDGBuilder& GraphBuilder)
+{
+	updateSectionInfos(GraphBuilder);
+	updateAABBData(GraphBuilder);
+	updateInstanceData(GraphBuilder);
+}
+
+void FLiteGPUSceneMeshVertexBuffer::InitRHI(FRHICommandListBase& RHICmdList)
+{
+	const auto VertSize = sizeof(FLiteGPUSceneMeshVertex);
+	FRHIResourceCreateInfo CreateInfo(TEXT("LiteGPUScene.VertexBuffer"));
+	VertexBufferRHI = RHICmdList.CreateVertexBuffer(Vertices.Num() * VertSize, BUF_Static, CreateInfo);
+
+	// Copy the vertex data into the vertex buffer.
+	void* Data = RHICmdList.LockBuffer(VertexBufferRHI, 0, Vertices.Num() * VertSize, RLM_WriteOnly);
+	FMemory::Memcpy(Data, Vertices.GetData(), Vertices.Num() * VertSize);
+	RHICmdList.UnlockBuffer(VertexBufferRHI);
+
+	VerticesNum = Vertices.Num();
+	Vertices.Empty();
+}
+
+void FLiteGPUSceneMeshIndexBuffer::InitRHI(FRHICommandListBase& RHICmdList)
+{
+	const auto IndexStride = sizeof(uint32);
+	FRHIResourceCreateInfo CreateInfo(TEXT("LiteGPUScene.IndexBuffer"));
+	IndexBufferRHI = RHICmdList.CreateIndexBuffer(IndexStride, Indices.Num() * IndexStride, BUF_Static, CreateInfo);
+
+	// Copy the vertex data into the vertex buffer.
+	void* Data = RHICmdList.LockBuffer(IndexBufferRHI, 0, Indices.Num() * IndexStride, RLM_WriteOnly);
+	FMemory::Memcpy(Data, Indices.GetData(), Indices.Num() * IndexStride);
+	RHICmdList.UnlockBuffer(IndexBufferRHI);
+
+	IndicesNum = Indices.Num();
+	Indices.Empty();
 }
 
 void FLiteGPUCombinedBuffer::Initialize(const TArray<FLiteGPUSceneMeshVertex>& Vertices, const TArray<uint32>& Indices)
 {
+	if (bIntialized)
+	{
+		return;
+	}
+	UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUCombinedBuffer::Initialize"));
 
+	check(VertexBuffer == nullptr && IndexBuffer == nullptr);
+	VertexBuffer = new FLiteGPUSceneMeshVertexBuffer();
+	IndexBuffer = new FLiteGPUSceneMeshIndexBuffer();
+
+	VertexBuffer->Vertices = Vertices;
+	IndexBuffer->Indices = Indices;
+
+	VertexNum = Vertices.Num();
+	IndiceNum = Indices.Num();
+	if (VertexNum > 0)
+	{
+		BeginInitResource(VertexBuffer);
+	}
+	if (IndiceNum > 0)
+	{
+		BeginInitResource(IndexBuffer);
+	}
+
+	UsedBytes += sizeof(FLiteGPUSceneMeshVertex) * Vertices.Num();
+	UsedBytes += sizeof(uint32) * Indices.Num();
+	bIntialized = true;
 }
 
 void FLiteGPUCombinedBuffer::Release_RenderingThread()
 {
+	check(IsInRenderingThread());
 
+	if (bIntialized)
+	{
+		bIntialized = false;
+		VertexBuffer->ReleaseResource();
+		IndexBuffer->ReleaseResource();
+
+		delete VertexBuffer;
+		delete IndexBuffer;
+
+		VertexBuffer = nullptr;
+		IndexBuffer = nullptr;
+	}
 }

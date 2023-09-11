@@ -8,6 +8,30 @@
 #include "Components/MeshComponent.h"
 #include "LiteGPUSceneComponent.generated.h"
 
+class FLiteGPUSceneProxy : public FPrimitiveSceneProxy
+{
+public:
+	SIZE_T GetTypeHash() const override
+	{
+		static size_t UniquePointer;
+		return reinterpret_cast<size_t>(&UniquePointer);
+	}
+
+	FLiteGPUSceneProxy(ULiteGPUSceneComponent* Component, ERHIFeatureLevel::Type InFeatureLevel);
+	virtual ~FLiteGPUSceneProxy();
+
+	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
+
+	virtual bool CanBeOccluded() const override { return false; }
+	virtual uint32 GetMemoryFootprint(void) const override { return(sizeof(*this) + GetAllocatedSize()); }
+	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
+	virtual void PostUpdateBeforePresent(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily);
+	uint32 GetAllocatedSize(void) const { return FPrimitiveSceneProxy::GetAllocatedSize(); }
+	void DrawMeshBatches(int32 ViewIndex, const FSceneView* View, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector) const;
+	void Init_RenderingThread();
+	ENGINE_API bool IsInitialized() const;
+};
+
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class ENGINE_API ULiteGPUSceneComponent : public UPrimitiveComponent
 {
@@ -31,6 +55,7 @@ public:
 
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
+	FPrimitiveSceneProxy* CreateSceneProxy() override;
 
 	TObjectPtr<class UStaticMesh> GetUnderlyingMesh() { return StaticMesh; }
 

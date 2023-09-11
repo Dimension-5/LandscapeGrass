@@ -50,7 +50,7 @@ public:
 	TArray<TObjectPtr<ULiteGPUSceneComponent>> Components;
 
 	void BuildLiteGPUScene();
-	FLiteGPUScene Scene;
+	TSharedPtr<FLiteGPUScene> Scene;
 private:
 	virtual void PreRegisterAllComponents() override;
 	virtual void UnregisterAllComponents(bool bForReregister = false) override;
