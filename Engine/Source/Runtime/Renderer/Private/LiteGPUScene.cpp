@@ -146,13 +146,19 @@ void FLiteGPUScene::ConstructCombinedData(const TArray<TObjectPtr<UStaticMesh>> 
 	{
 		check((int32)Index < CombinedData.Vertices.Num());
 	}	
-	// Collect render sections
+	// Do upload
+	CombinedBuffer.Initialize(CombinedData.Vertices, CombinedData.Indices);
+}
+
+void FLiteGPUScene::ConstructSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
+{
+	SceneData.SourceMeshes = AllSourceMeshes;
 	for (auto& [K, V] : CombinedData.SectionsMap)
 	{
 		for (auto& Patch : V)
 		{
-			Patch.PatchID = SectionInfos.Num();
-			SectionInfos.Add(Patch);
+			Patch.PatchID = SceneData.SectionInfos.Num();
+			SceneData.SectionInfos.Add(Patch);
 		}
 	}
 	// Calculate teh max lod numbers among all meshes
@@ -167,20 +173,67 @@ void FLiteGPUScene::ConstructCombinedData(const TArray<TObjectPtr<UStaticMesh>> 
 		}
 	}
 	// Another safety check
-	for (auto& SectionInfo : SectionInfos)
+	for (auto& SectionInfo : SceneData.SectionInfos)
 	{
 		check(SectionInfo.FirstVertexOffset + SectionInfo.VertexCount <= (uint32)CombinedData.Vertices.Num());
 		check(SectionInfo.FirstIndexOffset + SectionInfo.IndexCount <= (uint32)CombinedData.Indices.Num());
 	}
+	// Some initialization
+	SceneData.InstanceTypeNum = SceneData.SourceMeshes.Num();
+	SceneData.TotalSectionNum = SceneData.SectionInfos.Num();
+	SceneData.SectionMeshIndices.SetNum(SceneData.TotalSectionNum);
+	SceneData.Active.SectionInstanceNums.SetNum(SceneData.TotalSectionNum);
+	// Collects the <patchid, meshid> array
+	int32 PatchIndex = 0;
+	for (auto& Pair : CombinedData.SectionsMap)
+	{
+		const TArray<FLiteGPUSceneMeshSectionInfo>& SectionInfoArray = Pair.Value;
+		for (int32 Index = 0; Index < SectionInfoArray.Num(); Index++)
+		{
+			const auto& SectionInfo = SectionInfoArray[Index];
+			SceneData.SectionMeshIndices[PatchIndex] = SectionInfo.MeshIndex;
+			PatchIndex++;
+		}
+	}
+	// Stores AABB with BL-UR format
+	TArray<FVector4f> AABBs;
+	AABBs.SetNum(2 * SceneData.InstanceTypeNum);
+	for (int32 FoliageIndex = 0; FoliageIndex < SceneData.InstanceTypeNum; FoliageIndex++)
+	{
+		if (AllSourceMeshes[FoliageIndex])
+		{
+			FBoxSphereBounds MeshBound = AllSourceMeshes[FoliageIndex]->GetBounds();
+			FBox Box = MeshBound.GetBox();
+			FVector Min = Box.Min;
+			FVector Max = Box.Max;
+			AABBs[FoliageIndex * 2 + 0] = FVector4f(Min.X, Min.Y, Min.Z, MeshBound.SphereRadius);
+			AABBs[FoliageIndex * 2 + 1] = FVector4f(Max.X, Max.Y, Max.Z, 0);
+		}
+		else
+		{
+			AABBs[FoliageIndex * 2 + 0] = FVector4f(-50.0f, -50.0f, -50.0f, 0);
+			AABBs[FoliageIndex * 2 + 1] = FVector4f(50.0f, 50.0f, 50.0f, 0);
+		}
+	}
+	SceneData.SectionAABBData.SetNum(2 * sizeof(FVector4f) * SceneData.InstanceTypeNum);
+	FMemory::Memcpy(SceneData.SectionAABBData.GetData(), AABBs.GetData(), 2 * SceneData.InstanceTypeNum * sizeof(FVector4f));
+	// Do upload
 }
 
-void FLiteGPUScene::ConstructCombinedBuffers(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
+void FLiteGPUScene::ConstructScene(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
 {
-
-}
-
-void FLiteGPUScene::ConstructCombinedVertices(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
-{
+	// CombinedData
 	ConstructCombinedData(AllSourceMeshes);
-	ConstructCombinedBuffers(AllSourceMeshes);
+	// SceneData
+	ConstructSceneData(AllSourceMeshes);
+}
+
+void FLiteGPUCombinedBuffer::Initialize(const TArray<FLiteGPUSceneMeshVertex>& Vertices, const TArray<uint32>& Indices)
+{
+
+}
+
+void FLiteGPUCombinedBuffer::Release_RenderingThread()
+{
+
 }

@@ -97,7 +97,7 @@ public:
 		Release_RenderingThread();
 	}
 
-	void InitCombinedBuffers(const TArray<FLiteGPUSceneMeshVertex>& Vertices, const TArray<uint32>& Indices);
+	void Initialize(const TArray<FLiteGPUSceneMeshVertex>& Vertices, const TArray<uint32>& Indices);
 	void Release_RenderingThread();
 
 	FLiteGPUSceneMeshVertexBuffer* VertexBuffer;
@@ -141,20 +141,18 @@ struct FLiteGPUCounterBuffers
 
 struct FLiteGPUViewData
 {
-	int32 TotalSectionNum = 0;
-	bool bInitialized = false;
 	FConvexVolume ViewFrustum;
 	FVector3f ViewLocation;
 	FVector3f ViewForward;
 	FMatrix44f ProjMatrix;
 	FSphere3f ShadowBounds;
-	int32 MaxGPUInstanceToDraw;
-	bool bGPUCulling;
-	bool bDirty;
-	bool bFirstGPUCullinged;
-	bool bCreateImposterBuffer;
-	uint32 GPUByte;
-	int32 PerSectionMaxNum;
+	int32 MaxGPUInstanceToDraw = 0;
+	bool bGPUCulling = false;
+	bool bDirty = false;
+	bool bFirstGPUCullinged = false;
+	bool bCreateImposterBuffer = false;
+	uint32 GPUByteCount = 0;
+	int32 PerSectionMaxNum = 0;
 };
 
 struct FLiteGPUViewBuffers
@@ -171,8 +169,8 @@ struct FLiteGPUViewBuffers
 
 struct FLiteGPUSceneUpdate
 {
+	int32 InstanceNum = 0;
 	TArray<uint32> InstanceIndices; // The Indices of the instance that are dirty
-	int32 InstanceNum;
 	TArray<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
 	TArray<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
 	TArray<FVector2D> InstanceZWOffsets; // [Z-Offset, TileIndex]
@@ -184,57 +182,50 @@ struct FLiteGPUSceneUpdate
 
 struct FLiteGPUSceneActive
 {
+	TArray<int32> SectionInstanceNums; // Number of instances that references the section
+	int32 InstanceNum = 0;
+	bool bUpdateFrame = false;
+};
+
+struct FLiteGPUSceneData
+{
 	// const per build
+	TArray<FLiteGPUSceneMeshSectionInfo> SectionInfos;
+	int32 TotalSectionNum = 0;
+	TArray<TObjectPtr<UStaticMesh>> SourceMeshes;
 	/*
-	 * Array which  stores the AAbb data of the foliages, the length is equal foliage_num x 2 x sizeof(Vector4).
+	 * Array which  stores the AAbb data of the instances, the length is equal instance_num x 2 x sizeof(Vector4).
 	 * 2 stands for the BottomLeft and Top Right Pos of the AABB box
 	 */
 	TArray<uint8> SectionAABBData;
 	/*
 	 * Array which stores Mesh Index of each section,
-	 * the length is equal foliage_num x lod_num x section_num
+	 * the length is equal instance_num x lod_num x section_num
 	 */
 	TArray<int32> SectionMeshIndices;
-	TArray<FLiteGPUSceneMeshSectionInfo> SectionInfos;
-	uint32 GPUByteCount;
-	int32 FoliageTypeNum;
+	uint32 GPUByteCount = 0;
+	int32 InstanceTypeNum = 0;
 	// const per build
 
-	/*
-	 * Number of instances that references the section
-	 */
-	TArray<int32> SectionInstanceNum;
-	int32 InstanceNum;
-	bool bUpdateFrame;
-};
-
-struct FLiteGPUSceneData
-{
 	FLiteGPUSceneUpdate Update;
 	FLiteGPUSceneActive Active;
-	// int32 AllInstanceIndexNum;
-	/*
-	 * Actually, this stores the max lod numbers among the gpu scene meshes
-	 */
-	// int32 PerSectionMaxNum;
-	// bool bInitialized;
 };
 
 struct FLiteGPUSceneBuffers
 {
-	FRDGBufferHandle AllSectionInfoBuffer;
-	// FRDGBufferHandle RWDrawedTriangleCountBuffer;
-	FRDGBufferHandle MeshAABBBuffer;
+	TRefCountPtr<FRDGPooledBuffer> AllSectionInfoBuffer;
+	// TRefCountPtr<FRDGPooledBuffer> RWDrawedTriangleCountBuffer;
+	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
 	/*
 	 * This Buffer stores the instance id of section draw
 	 * InstanceID(SectionID,i-th draw) = RWInstanceIndiceBuffer[SectionStartOffset(SectionID)+i]
 	 */
-	FRDGBufferHandle RWGPUInstanceIndicesBuffer;
-	FRDGBufferHandle RWInstanceScaleBuffer;
-	FRDGBufferHandle RWInstanceTransformBuffer;
-	FRDGBufferHandle RWInstanceTypeBuffer;
-	FRDGBufferHandle RWInstanceSectionNumBuffer;
-	FRDGBufferHandle RWInstanceSectionIDsBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWGPUInstanceIndicesBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWInstanceScaleBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWInstanceTransformBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWInstanceTypeBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWInstanceSectionNumBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWInstanceSectionIDsBuffer;
 };
 
 struct RENDERER_API FLiteGPUScene
@@ -242,11 +233,11 @@ struct RENDERER_API FLiteGPUScene
 public:
 	FLiteGPUScene();
 	~FLiteGPUScene();
-	void ConstructCombinedVertices(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
+	void ConstructScene(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 
 protected:
 	void ConstructCombinedData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
-	void ConstructCombinedBuffers(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
+	void ConstructSceneData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 
 	void FillMeshLODSectionData(int32 LodIndex, const FStaticMeshRenderData* MeshRenderData, 
 		const FStaticMeshLODResources& LODResource, const FStaticMeshSection& RenderSection, 
@@ -256,7 +247,6 @@ protected:
 		float& OutScreenSizeMin, float& OutScreenSizeMax);
 
 	int32 PerSectionMaxNum;
-	TArray<FLiteGPUSceneMeshSectionInfo> SectionInfos;
 	TArray<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
 	TArray<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
 	TArray<FVector2D> InstanceZWOffsets; // [Z-Offset, TileIndex]

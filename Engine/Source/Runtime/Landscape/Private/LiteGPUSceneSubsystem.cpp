@@ -105,7 +105,7 @@ void ALiteGPUSceneManager::BuildLiteGPUScene()
 	{
 		Meshes.AddUnique(Component->GetUnderlyingMesh());
 	}
-	Scene.ConstructCombinedVertices(Meshes);
+	Scene.ConstructScene(Meshes);
 
 	const auto Elapsed = FDateTime::UtcNow() - StartTime;
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Lite GPU scene build finished in %d milliseconds"), Elapsed.GetTotalMilliseconds());
