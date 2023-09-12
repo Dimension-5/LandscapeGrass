@@ -7,7 +7,7 @@ static int sDisplayLiteGPUScene = 1;
 static FAutoConsoleVariableRef CVarDrawLiteGPUScene(
 	TEXT("r.LiteGPUScene.Enable"),
 	sDisplayLiteGPUScene,
-	TEXT(" Display GPUDriven Scene.\n"),
+	TEXT("Display GPUDriven Scene.\n"),
 	ECVF_Scalability
 );
 
@@ -15,7 +15,7 @@ static float sTileDistanceX = 1000.f;
 static FAutoConsoleVariableRef CVarTileDistanceX(
 	TEXT("r.LiteGPUScene.TileDistanceX"),
 	sTileDistanceX,
-	TEXT(" X Distance between tiles.\n"),
+	TEXT("X Distance between tiles.\n"),
 	ECVF_ReadOnly
 );
 
@@ -23,7 +23,7 @@ static float sTileDistanceY = 1000.f;
 static FAutoConsoleVariableRef CVarTileDistanceY(
 	TEXT("r.LiteGPUScene.TileDistanceY"),
 	sTileDistanceY,
-	TEXT(" Y Distance between tiles.\n"),
+	TEXT("Y Distance between tiles.\n"),
 	ECVF_ReadOnly
 );
 
@@ -250,6 +250,15 @@ void ALiteGPUSceneManager::BuildLiteGPUScene()
 	Scene = MakeShared<FLiteGPUScene>();
 	Scene->BuildScene(Meshes);
 
+	ENQUEUE_RENDER_COMMAND(UpdateLiteGPUScene)(
+		[this](FRHICommandListImmediate& RHICmdList)
+		{
+			FRDGBuilder GraphBuilder(RHICmdList);
+			Scene->UpdateSectionInfos(GraphBuilder);
+			Scene->UpdateAABBData(GraphBuilder);
+			GraphBuilder.Execute();
+		});
+
 	const auto Elapsed = FDateTime::UtcNow() - StartTime;
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Lite GPU scene build finished in %d milliseconds"), Elapsed.GetTotalMilliseconds());
 }
@@ -274,7 +283,7 @@ void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENa
 				[this](FRHICommandListImmediate& RHICmdList)
 				{
 					FRDGBuilder GraphBuilder(RHICmdList);
-					Scene->UpdateScene(GraphBuilder);
+					Scene->UpdateInstanceData(GraphBuilder);
 					GraphBuilder.Execute();
 				});
 		}

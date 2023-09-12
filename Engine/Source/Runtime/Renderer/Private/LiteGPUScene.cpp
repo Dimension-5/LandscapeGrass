@@ -1,4 +1,5 @@
 #include "LiteGPUScene.h"
+#include "RenderGraphBuilder.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All);
 
@@ -215,7 +216,7 @@ void FLiteGPUScene::BuildScene(const TArray<TObjectPtr<UStaticMesh>> AllSourceMe
 	buildSceneData(AllSourceMeshes);
 }
 
-void FLiteGPUScene::updateSectionInfos(FRDGBuilder& GraphBuilder)
+void FLiteGPUScene::UpdateSectionInfos(FRDGBuilder& GraphBuilder)
 {
 	if (SceneData.TotalSectionNum != 0)
 	{
@@ -231,6 +232,22 @@ void FLiteGPUScene::updateSectionInfos(FRDGBuilder& GraphBuilder)
 		ResizeParams.NumBytes = SceneData.TotalSectionNum * 2 * sizeof(FVector4f);
 		ResizeParams.NumArrays = SceneData.TotalSectionNum * 2;
 		BufferState.SectionInfoBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, SectionInfoBuffer, ResizeParams, TEXT("LiteGPUScene.SectionInfo"));
+	
+		struct FTaskContext
+		{
+			FRDGScatterUploader* SectionInfoUploader = nullptr;
+		};
+		FTaskContext& TaskContext = *GraphBuilder.AllocObject<FTaskContext>();
+		TaskContext.SectionInfoUploader = SectionInfoUploadBuffer.Begin(GraphBuilder, BufferState.SectionInfoBuffer, SceneData.TotalSectionNum * 2, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.SectionInfo"));
+		GraphBuilder.AddCommandListSetupTask([&TaskContext, SectionInfoBufferArray](FRHICommandListBase& RHICmdList) {
+			SCOPED_NAMED_EVENT(UpdateLiteGPUScene_SectionInfos, FColor::Green);
+			LockIfValid(RHICmdList, TaskContext.SectionInfoUploader);
+
+			TaskContext.SectionInfoUploader->Add(0, SectionInfoBufferArray.GetData(), SectionInfoBufferArray.Num());
+
+			UnlockIfValid(RHICmdList, TaskContext.SectionInfoUploader);
+		});
+		SectionInfoUploadBuffer.End(GraphBuilder, TaskContext.SectionInfoUploader);
 	}
 	else
 	{
@@ -238,16 +255,33 @@ void FLiteGPUScene::updateSectionInfos(FRDGBuilder& GraphBuilder)
 	}
 }
 
-void FLiteGPUScene::updateAABBData(FRDGBuilder& GraphBuilder)
+void FLiteGPUScene::UpdateAABBData(FRDGBuilder& GraphBuilder)
 {
 	if (SceneData.InstanceTypeNum != 0)
 	{
 		TResourceArray<FVector4f, VERTEXBUFFER_ALIGNMENT> AABBArray;
 		AABBArray.SetNumUninitialized(SceneData.InstanceTypeNum * 2);
+		FMemory::Memcpy(AABBArray.GetData(), SceneData.SectionAABBData.GetData(), 2 * SceneData.InstanceTypeNum * sizeof(FVector4f));
 		FResizeResourceSOAParams ResizeParams;
 		ResizeParams.NumBytes = SceneData.InstanceTypeNum * 2 * sizeof(FVector4f);
 		ResizeParams.NumArrays = SceneData.InstanceTypeNum * 2;
-		BufferState.MeshAABBBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, MeshAABBBuffer, ResizeParams, TEXT("LiteGPUScene.AABB"));
+		BufferState.MeshAABBBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, MeshAABBBuffer, ResizeParams, TEXT("LiteGPUScene.AABBs"));
+	
+		struct FTaskContext
+		{
+			FRDGScatterUploader* AABBUploader = nullptr;
+		};
+		FTaskContext& TaskContext = *GraphBuilder.AllocObject<FTaskContext>();
+		TaskContext.AABBUploader = MeshAABBUploadBuffer.Begin(GraphBuilder, BufferState.MeshAABBBuffer, SceneData.InstanceTypeNum * 2, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.AABBs"));
+		GraphBuilder.AddCommandListSetupTask([&TaskContext, AABBArray](FRHICommandListBase& RHICmdList) {
+			SCOPED_NAMED_EVENT(UpdateLiteGPUScene_AABBs, FColor::Green);
+			LockIfValid(RHICmdList, TaskContext.AABBUploader);
+
+			TaskContext.AABBUploader->Add(0, AABBArray.GetData(), AABBArray.Num());
+
+			UnlockIfValid(RHICmdList, TaskContext.AABBUploader);
+			});
+		MeshAABBUploadBuffer.End(GraphBuilder, TaskContext.AABBUploader);
 	}
 	else
 	{
@@ -255,7 +289,7 @@ void FLiteGPUScene::updateAABBData(FRDGBuilder& GraphBuilder)
 	}
 }
 
-void FLiteGPUScene::updateInstanceData(FRDGBuilder& GraphBuilder)
+void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 {
 	const auto InstanceCapacity = SceneData.InstanceCapacity;
 	if (InstanceCapacity != 0)
@@ -300,13 +334,6 @@ void FLiteGPUScene::updateInstanceData(FRDGBuilder& GraphBuilder)
 		InstanceZWBuffer.SafeRelease();
 		InstanceRotScaleBuffer.SafeRelease();
 	}
-}
-
-void FLiteGPUScene::UpdateScene(FRDGBuilder& GraphBuilder)
-{
-	updateSectionInfos(GraphBuilder);
-	updateAABBData(GraphBuilder);
-	updateInstanceData(GraphBuilder);
 }
 
 void FLiteGPUScene::EnqueueUpdates_TS(const FLiteGPUSceneUpdate&& Update)

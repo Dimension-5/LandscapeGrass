@@ -212,17 +212,17 @@ public:
 	FLiteGPUScene();
 	~FLiteGPUScene();
 	void BuildScene(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
-	void UpdateScene(FRDGBuilder& GraphBuilder);
+	
+	void UpdateSectionInfos(FRDGBuilder& GraphBuilder);
+	void UpdateAABBData(FRDGBuilder& GraphBuilder);
+	void UpdateInstanceData(FRDGBuilder& GraphBuilder);
+
 	void EnqueueUpdates_TS(const FLiteGPUSceneUpdate&& UpdateToEnqueue);
 
 protected:
 	friend class ALiteGPUSceneManager;
 	void buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 	void buildSceneData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
-
-	void updateSectionInfos(FRDGBuilder& GraphBuilder);
-	void updateAABBData(FRDGBuilder& GraphBuilder);
-	void updateInstanceData(FRDGBuilder& GraphBuilder);
 
 	void fillMeshLODSectionData(int32 LodIndex, const FStaticMeshRenderData* MeshRenderData, 
 		const FStaticMeshLODResources& LODResource, const FStaticMeshSection& RenderSection, 
@@ -244,17 +244,27 @@ protected:
 
 	FLiteGPUCombinedBuffer CombinedBuffer;
 	TRefCountPtr<FRDGPooledBuffer> SectionInfoBuffer;
+	FRDGAsyncScatterUploadBuffer SectionInfoUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
+	FRDGAsyncScatterUploadBuffer MeshAABBUploadBuffer;
 
 	TRefCountPtr<FRDGPooledBuffer> InstanceIndicesBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceIndicesUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceTypeBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceTypeUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectionNumBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceSectionNumUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectionIDsBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceSectionIDsUploadBuffer;
 
 	TRefCountPtr<FRDGPooledBuffer> InstanceTilePosBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceTilePosUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceXYBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceXYUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceZWBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceZWUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceRotScaleBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceRotScaleUploadBuffer;
 
 	FLiteGPUViewBuffers ViewBuffers;
 	FLiteGPUBufferState BufferState;
