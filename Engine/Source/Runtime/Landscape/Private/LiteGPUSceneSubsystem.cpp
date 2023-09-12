@@ -109,14 +109,120 @@ void ALiteGPUSceneManager::UnregisterAllComponents(bool bForReregister)
 	Super::UnregisterAllComponents(bForReregister);
 }
 
-void ALiteGPUSceneManager::OnAdd(const TArrayView<FLiteGPUSceneInstance> Instances)
+void ALiteGPUSceneManager::OnAdd(TObjectPtr<ULiteGPUSceneComponent> Comp, const TArrayView<FLiteGPUSceneInstance> Instances)
 {
+	if (Scene.IsValid())
+	{
+		auto& SceneData = Scene->SceneData;
+		const auto MeshIndex = SceneData.SourceMeshes.Find(Comp->StaticMesh);
 
+		const auto OldInstanceNum = SceneData.InstanceNum;
+		SceneData.InstanceNum += Instances.Num();
+		SceneData.InstanceCapacity += Instances.Num();
+
+		for (int32 IndexOffset = 0; IndexOffset < Instances.Num(); IndexOffset++)
+		{
+			const int32 NewInstanceIndex = IndexOffset + OldInstanceNum;
+			const auto& ToAdd = Instances[IndexOffset];
+			SceneData.TilesPositions.Add(ToAdd.TilePosition);
+			SceneData.InstanceXYOffsets.Add({ ToAdd.XOffset, ToAdd.YOffset });
+			SceneData.InstanceZWOffsets.Add({ ToAdd.ZOffset, -1/*TODO: Tile CullingID*/});
+			SceneData.InstanceRotationScales.Add({ ToAdd.XRot, ToAdd.YRot, ToAdd.ZRot, ToAdd.Scale });
+			SceneData.InstanceTypes.Add(MeshIndex);
+			check(CIDToPID.FindOrAdd(Comp).Find(ToAdd.IDWithinComponent) == nullptr);
+			CIDToPID.FindOrAdd(Comp).Add(ToAdd.IDWithinComponent, NewInstanceIndex);
+		}
+
+		int32 SectionIndex = 0;
+		SceneData.InstanceSectionNums.SetNum(OldInstanceNum + Instances.Num());
+		SceneData.InstanceSectionIDs.SetNum(SceneData.InstanceSectionNums.Num() * Scene->PerSectionMaxNum);
+		for (auto& SectionInfo : SceneData.SectionInfos)
+		{
+			for (int32 IndexOffset = 0; IndexOffset < Instances.Num(); IndexOffset++)
+			{
+				const int32 NewInstanceIndex = IndexOffset + OldInstanceNum;
+				const int32 InstanceSectionStart = NewInstanceIndex * Scene->PerSectionMaxNum;
+				if (SectionInfo.MeshIndex == MeshIndex)
+				{
+					int32 InsertIndex = SceneData.InstanceSectionNums[NewInstanceIndex];
+					SceneData.InstanceSectionNums[NewInstanceIndex] += 1;
+					SceneData.SectionInstanceNums[SectionIndex] += 1;
+					SceneData.InstanceSectionIDs[InstanceSectionStart + InsertIndex] = SectionIndex;
+				}
+			}
+			SectionIndex++;
+		}
+
+		FLiteGPUSceneUpdate Update;
+		Update.InstanceNum = Instances.Num();
+		for (int32 Index = 0; Index < Update.InstanceNum; Index++)
+		{
+			Update.InstanceIndices.Add(Index + OldInstanceNum);
+		}
+		Scene->EnqueueUpdates_TS(MoveTemp(Update));
+	}
 }
 
-void ALiteGPUSceneManager::OnRemove(const TArrayView<FLiteGPUSceneInstance> Instances)
+void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, const TArrayView<FLiteGPUSceneInstance> Instances)
 {
+	if (Scene.IsValid())
+	{
+		FLiteGPUSceneUpdate Update;
 
+		auto& SceneData = Scene->SceneData;
+		const auto MeshIndex = SceneData.SourceMeshes.Find(Comp->StaticMesh);
+
+		auto TailNum = SceneData.InstanceNum;
+		SceneData.InstanceNum -= Instances.Num();
+		SceneData.InstanceCapacity -= Instances.Num();
+
+		for (int32 IndexOffset = 0; IndexOffset < Instances.Num(); IndexOffset++)
+		{
+			const auto LastIndex = TailNum - 1;
+			const auto RemoveIndex = CIDToPID.FindOrAdd(Comp)[Instances[IndexOffset].IDWithinComponent];
+			if (LastIndex != RemoveIndex)
+			{
+				SceneData.TilesPositions[RemoveIndex] = SceneData.TilesPositions[LastIndex];
+				SceneData.InstanceXYOffsets[RemoveIndex] = SceneData.InstanceXYOffsets[LastIndex];
+				SceneData.InstanceZWOffsets[RemoveIndex] = SceneData.InstanceZWOffsets[LastIndex];
+				SceneData.InstanceRotationScales[RemoveIndex] = SceneData.InstanceRotationScales[LastIndex];
+				SceneData.InstanceTypes[RemoveIndex] = SceneData.InstanceTypes[LastIndex];
+
+				SceneData.InstanceSectionNums[RemoveIndex] = SceneData.InstanceSectionNums[LastIndex];
+				SceneData.InstanceSectionNums[LastIndex] = 0;
+
+				for (int32 i = 0; i < Scene->PerSectionMaxNum; i++)
+				{
+					SceneData.InstanceSectionIDs[RemoveIndex * Scene->PerSectionMaxNum + i] = SceneData.InstanceSectionIDs[LastIndex * Scene->PerSectionMaxNum + i];
+					SceneData.InstanceSectionIDs[LastIndex * Scene->PerSectionMaxNum + i] = 0;
+				}
+
+				Update.InstanceNum++;
+				Update.InstanceIndices.Add(LastIndex);
+			}
+			TailNum--;
+			CIDToPID.FindOrAdd(Comp).Remove(Instances[IndexOffset].IDWithinComponent);
+		}
+
+		SceneData.TilesPositions.SetNum(SceneData.InstanceNum);
+		SceneData.InstanceXYOffsets.SetNum(SceneData.InstanceNum);
+		SceneData.InstanceZWOffsets.SetNum(SceneData.InstanceNum);
+		SceneData.InstanceRotationScales.SetNum(SceneData.InstanceNum);
+		SceneData.InstanceTypes.SetNum(SceneData.InstanceNum);
+		SceneData.InstanceSectionNums.SetNum(SceneData.InstanceNum);
+		SceneData.InstanceSectionIDs.SetNum(Scene->PerSectionMaxNum * SceneData.InstanceNum);
+
+		for (int32 pIndex = 0; pIndex < SceneData.SectionInstanceNums.Num(); pIndex++)
+		{
+			if (SceneData.SectionInfos[pIndex].MeshIndex == MeshIndex)
+			{
+				SceneData.SectionInstanceNums[pIndex] -= Instances.Num();
+				break;
+			}
+		}
+
+		Scene->EnqueueUpdates_TS(MoveTemp(Update));
+	}
 }
 
 void ALiteGPUSceneManager::BuildLiteGPUScene()

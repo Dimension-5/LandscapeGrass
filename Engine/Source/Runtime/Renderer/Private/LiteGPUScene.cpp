@@ -158,10 +158,10 @@ void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSour
 	SceneData.SourceMeshes = AllSourceMeshes;
 	for (auto& [K, V] : CombinedData.SectionsMap)
 	{
-		for (auto& Patch : V)
+		for (auto& Section : V)
 		{
-			Patch.PatchID = SceneData.SectionInfos.Num();
-			SceneData.SectionInfos.Add(Patch);
+			Section.PatchID = SceneData.SectionInfos.Num();
+			SceneData.SectionInfos.Add(Section);
 		}
 	}
 	// Calculate teh max lod numbers among all meshes
@@ -184,20 +184,7 @@ void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSour
 	// Some initialization
 	SceneData.InstanceTypeNum = SceneData.SourceMeshes.Num();
 	SceneData.TotalSectionNum = SceneData.SectionInfos.Num();
-	SceneData.SectionMeshIndices.SetNum(SceneData.TotalSectionNum);
 	SceneData.SectionInstanceNums.SetNum(SceneData.TotalSectionNum);
-	// Collects the <patchid, meshid> array
-	int32 PatchIndex = 0;
-	for (auto& Pair : CombinedData.SectionsMap)
-	{
-		const TArray<FLiteGPUSceneMeshSectionInfo>& SectionInfoArray = Pair.Value;
-		for (int32 Index = 0; Index < SectionInfoArray.Num(); Index++)
-		{
-			const auto& SectionInfo = SectionInfoArray[Index];
-			SceneData.SectionMeshIndices[PatchIndex] = SectionInfo.MeshIndex;
-			PatchIndex++;
-		}
-	}
 	// Stores AABB with BL-UR format
 	TArray<FVector4f> AABBs;
 	AABBs.SetNum(2 * SceneData.InstanceTypeNum);
@@ -320,6 +307,12 @@ void FLiteGPUScene::UpdateScene(FRDGBuilder& GraphBuilder)
 	updateSectionInfos(GraphBuilder);
 	updateAABBData(GraphBuilder);
 	updateInstanceData(GraphBuilder);
+}
+
+void FLiteGPUScene::EnqueueUpdates_TS(const FLiteGPUSceneUpdate&& Update)
+{
+	FScopeLock Lock(&SceneUpdatesMutex);
+	SceneData.Updates.Enqueue(Update);
 }
 
 void FLiteGPUSceneMeshVertexBuffer::InitRHI(FRHICommandListBase& RHICmdList)

@@ -59,7 +59,18 @@ void FLiteGPUSceneProxy::Init_RenderingThread()
 
 void ULiteGPUSceneComponent::ManagedTick(float DeltaTime)
 {
-
+	if (!PendingOps.IsEmpty())
+	{
+		auto Ops = PendingOps.Pop(true);
+		if (Ops.Value == OP_ADD)
+		{
+			Handler->OnAdd(this, Ops.Key);
+		}
+		else if (Ops.Value == OP_REMOVE)
+		{
+			Handler->OnRemove(this, Ops.Key);
+		}
+	}
 }
 
 TArray<int64> ULiteGPUSceneComponent::AddInstancesWS(const TArray<FTransform>& InstanceTransforms)
@@ -92,7 +103,14 @@ TArray<int64> ULiteGPUSceneComponent::AddInstancesWS(const TArray<FTransform>& I
 		InstanceIDs.Add(NewInstance.IDWithinComponent);
 		NewInstances.Add(NewInstance);
 	}
-	Handler->OnAdd(NewInstances);
+	if (Handler)
+	{
+		Handler->OnAdd(this, NewInstances);
+	}
+	else
+	{
+		PendingOps.Add({ NewInstances, OP_ADD });
+	}
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Added %d Instances to LiteGPUScene."), InstanceIDs.Num());
 	return InstanceIDs;
 }
@@ -132,14 +150,28 @@ bool ULiteGPUSceneComponent::RemoveInstances(const TArray<int64>& InstancesToRem
 			IDToSlotMap.Remove(ID);
 		}
 	}
-	Handler->OnRemove(RemovedInstances);
+	if (Handler)
+	{
+		Handler->OnRemove(this, RemovedInstances);
+	}
+	else
+	{
+		PendingOps.Add({ RemovedInstances, OP_REMOVE });
+	}
 	PersistantInstances.Shrink();
 	return false;
 }
 
 bool ULiteGPUSceneComponent::ClearInstances()
 {
-	Handler->OnRemove(PersistantInstances);
+	if (Handler)
+	{
+		Handler->OnRemove(this, PersistantInstances);
+	}
+	else
+	{
+		PendingOps.Add({ PersistantInstances, OP_REMOVE });
+	}
 	PersistantInstances.SetNum(0, true);
 	IDToSlotMap.Empty();
 	IDToSlotMap.Shrink();

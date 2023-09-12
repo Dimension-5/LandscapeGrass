@@ -141,7 +141,6 @@ struct FLiteGPUViewData
 	bool bFirstGPUCullinged = false;
 	bool bCreateImposterBuffer = false;
 	uint32 GPUByteCount = 0;
-	int32 PerSectionMaxNum = 0;
 };
 
 struct FLiteGPUViewBuffers
@@ -159,45 +158,36 @@ struct FLiteGPUViewBuffers
 struct FLiteGPUSceneUpdate
 {
 	int32 InstanceNum = 0;
-	TArray<uint32> InstanceIndices; // The Indices of the instance that are dirty
-	TArray<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
-	TArray<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
-	TArray<FVector2f> InstanceZWOffsets; // [Z-Offset, TileIndex]
-	TArray<FLiteGPUHalf4> InstanceRotationScales; // [X-Rotation, Y-Rotation, Z-Rotation, Scale]
-	TArray<uint8> InstanceTypes;
-	TArray<uint8> InstanceSectionIDs;
-	TArray<uint8> InstanceSectionNums;
+	TArray64<uint32> InstanceIndices; // The Indices of the instance that are dirty
 };
 
 struct FLiteGPUSceneData
 {
 	// const per build
-	TArray<FLiteGPUSceneMeshSectionInfo> SectionInfos;
+	TArray64<FLiteGPUSceneMeshSectionInfo> SectionInfos;
 	int32 TotalSectionNum = 0;
-	TArray<TObjectPtr<UStaticMesh>> SourceMeshes;
+	TArray64<TObjectPtr<UStaticMesh>> SourceMeshes;
 	/*
-	 * Array which  stores the AAbb data of the instances, the length is equal instance_num x 2 x sizeof(Vector4).
+	 * Array which stores the AAbb data of the instances, the length is equal instance_num x 2 x sizeof(Vector4).
 	 * 2 stands for the BottomLeft and Top Right Pos of the AABB box
 	 */
-	TArray<uint8> SectionAABBData;
-	/*
-	 * Array which stores Mesh Index of each section,
-	 * the length is equal instance_num x lod_num x section_num
-	 */
-	TArray<int32> SectionMeshIndices;
+	TArray64<uint8> SectionAABBData;
 	uint32 GPUByteCount = 0;
 	int32 InstanceTypeNum = 0;
 	// const per build
 
-	TArray<int32> SectionInstanceNums; // Number of instances that references the section
 	int32 InstanceNum = 0;
-	int32 InstanceCapacity = 1048 * 1024 * 64;
-	bool bUpdateFrame = false;
+	int32 InstanceCapacity = 0;
+	TArray64<int32> SectionInstanceNums; // Number of instances that references the section
+	TArray64<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
+	TArray64<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
+	TArray64<FVector2f> InstanceZWOffsets; // [Z-Offset, TileIndex]
+	TArray64<FLiteGPUHalf4> InstanceRotationScales; // [X-Rotation, Y-Rotation, Z-Rotation, Scale]
+	TArray64<uint8> InstanceTypes;
+	TArray64<uint8> InstanceSectionIDs;
+	TArray64<uint8> InstanceSectionNums;
 
 	TQueue<FLiteGPUSceneUpdate, EQueueMode::Spsc> Updates;
-	FCriticalSection UpdatesMutex;
-
-	RENDERER_API void EnqueueUpdates();
 };
 
 struct FLiteGPUBufferState
@@ -223,8 +213,10 @@ public:
 	~FLiteGPUScene();
 	void BuildScene(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 	void UpdateScene(FRDGBuilder& GraphBuilder);
+	void EnqueueUpdates_TS(const FLiteGPUSceneUpdate&& UpdateToEnqueue);
 
 protected:
+	friend class ALiteGPUSceneManager;
 	void buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 	void buildSceneData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 
@@ -240,13 +232,14 @@ protected:
 		float& OutScreenSizeMin, float& OutScreenSizeMax);
 
 	int32 PerSectionMaxNum = 0;
-	TArray<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
-	TArray<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
-	TArray<FVector2D> InstanceZWOffsets; // [Z-Offset, TileIndex]
-	TArray<FLiteGPUHalf4> InstanceRotationScales; // [X-Rotation, Y-Rotation, Z-Rotation, Scale]
+	TArray64<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
+	TArray64<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
+	TArray64<FVector2D> InstanceZWOffsets; // [Z-Offset, TileIndex]
+	TArray64<FLiteGPUHalf4> InstanceRotationScales; // [X-Rotation, Y-Rotation, Z-Rotation, Scale]
 
 	FLiteGPUCombinedData CombinedData;
 	FLiteGPUSceneData SceneData;
+	FCriticalSection SceneUpdatesMutex;
 	FLiteGPUViewData ViewData;
 
 	FLiteGPUCombinedBuffer CombinedBuffer;

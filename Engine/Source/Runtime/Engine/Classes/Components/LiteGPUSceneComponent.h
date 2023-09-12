@@ -8,6 +8,8 @@
 #include "Components/MeshComponent.h"
 #include "LiteGPUSceneComponent.generated.h"
 
+class ULiteGPUSceneComponent;
+
 struct FLiteGPUSceneInstance
 {
 	int64 IDWithinComponent;
@@ -19,8 +21,8 @@ struct FLiteGPUSceneInstance
 
 struct ILiteGPUSceneInstanceHandler
 {
-	virtual void OnAdd(const TArrayView<FLiteGPUSceneInstance> Instances) = 0;
-	virtual void OnRemove(const TArrayView<FLiteGPUSceneInstance> Instances) = 0;
+	virtual void OnAdd(TObjectPtr<ULiteGPUSceneComponent>, const TArrayView<FLiteGPUSceneInstance> Instances) = 0;
+	virtual void OnRemove(TObjectPtr<ULiteGPUSceneComponent>, const TArrayView<FLiteGPUSceneInstance> Instances) = 0;
 };
 
 class FLiteGPUSceneProxy : public FPrimitiveSceneProxy
@@ -81,6 +83,13 @@ private:
 	int64 NextInstanceID = 0;
 	TMap<int64, int64> IDToSlotMap;
 	TArray64<FLiteGPUSceneInstance> PersistantInstances;
+
+	enum OPS
+	{
+		OP_ADD,
+		OP_REMOVE
+	};
+	TArray64<TTuple<TArray64<FLiteGPUSceneInstance>, OPS>> PendingOps;
 
 	friend class ALiteGPUSceneManager;
 	ILiteGPUSceneInstanceHandler* Handler;

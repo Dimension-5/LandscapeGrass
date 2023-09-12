@@ -44,14 +44,16 @@ class LANDSCAPE_API ALiteGPUSceneManager : public AActor, public ILiteGPUSceneIn
 {
 	GENERATED_BODY()
 public:
-	virtual void OnAdd(const TArrayView<FLiteGPUSceneInstance> Instances) override;
-	virtual void OnRemove(const TArrayView<FLiteGPUSceneInstance> Instances) override;
+	virtual void OnAdd(TObjectPtr<ULiteGPUSceneComponent>, const TArrayView<FLiteGPUSceneInstance> Instances) override;
+	virtual void OnRemove(TObjectPtr<ULiteGPUSceneComponent>, const TArrayView<FLiteGPUSceneInstance> Instances) override;
 	
 	UFUNCTION(BlueprintPure, meta = (WorldContext = WorldContext), Category = "ALiteGPUSceneManager")
 	static ALiteGPUSceneManager* Get(const UObject* WorldContext);
 	
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "ALiteGPUSceneManager")
 	TArray<TObjectPtr<ULiteGPUSceneComponent>> Components;
+
+	TMap<TObjectPtr<ULiteGPUSceneComponent>, TMap<int64, int64>> CIDToPID;
 
 	void BuildLiteGPUScene();
 	TSharedPtr<FLiteGPUScene> Scene;
