@@ -140,7 +140,6 @@ struct FLiteGPUViewData
 	bool bDirty = false;
 	bool bFirstGPUCullinged = false;
 	bool bCreateImposterBuffer = false;
-	uint32 GPUByteCount = 0;
 };
 
 struct FLiteGPUViewBuffers
@@ -172,7 +171,6 @@ struct FLiteGPUSceneData
 	 * 2 stands for the BottomLeft and Top Right Pos of the AABB box
 	 */
 	TArray64<uint8> SectionAABBData;
-	uint32 GPUByteCount = 0;
 	int32 InstanceTypeNum = 0;
 	// const per build
 
