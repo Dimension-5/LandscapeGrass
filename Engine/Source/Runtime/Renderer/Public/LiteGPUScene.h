@@ -36,7 +36,6 @@ struct FLiteGPUSceneMeshSectionInfo
 
 struct FLiteGPUSceneMeshVertex
 {
-public:
 	FLiteGPUSceneMeshVertex();
 	FLiteGPUSceneMeshVertex(const FLiteGPUSceneMeshVertex& Another);
 	FLiteGPUSceneMeshVertex(const FVector3f& InPosition);
@@ -83,21 +82,11 @@ struct FLiteGPUSceneMeshIndexBuffer final : public FIndexBuffer
 
 struct FLiteGPUCombinedBuffer
 {
-public:
-	FLiteGPUCombinedBuffer()
-		: VertexBuffer(nullptr), IndexBuffer(nullptr)
-		, UsedBytes(0), VertexNum(0)
-		, IndiceNum(0), bIntialized(false)
-	{
-
-	}
-
-	~FLiteGPUCombinedBuffer()
-	{
-		Release_RenderingThread();
-	}
+	FLiteGPUCombinedBuffer();
+	~FLiteGPUCombinedBuffer();
 
 	void Initialize(const TArray<FLiteGPUSceneMeshVertex>& Vertices, const TArray<uint32>& Indices);
+	void Release_AnyThread();
 	void Release_RenderingThread();
 
 	FLiteGPUSceneMeshVertexBuffer* VertexBuffer;
@@ -184,7 +173,7 @@ struct FLiteGPUSceneActive
 {
 	TArray<int32> SectionInstanceNums; // Number of instances that references the section
 	int32 InstanceNum = 0;
-	int32 InstanceCapacity = 2048 * 1024;
+	int32 InstanceCapacity = 1048 * 1024 * 64;
 	bool bUpdateFrame = false;
 };
 

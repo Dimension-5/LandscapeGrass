@@ -11,6 +11,22 @@ static FAutoConsoleVariableRef CVarDrawLiteGPUScene(
 	ECVF_Scalability
 );
 
+static float sTileDistanceX = 1000.f;
+static FAutoConsoleVariableRef CVarTileDistanceX(
+	TEXT("r.LiteGPUScene.TileDistanceX"),
+	sTileDistanceX,
+	TEXT(" X Distance between tiles.\n"),
+	ECVF_ReadOnly
+);
+
+static float sTileDistanceY = 1000.f;
+static FAutoConsoleVariableRef CVarTileDistanceY(
+	TEXT("r.LiteGPUScene.TileDistanceY"),
+	sTileDistanceY,
+	TEXT(" Y Distance between tiles.\n"),
+	ECVF_ReadOnly
+);
+
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All)
 static TMap<UWorld*, ALiteGPUSceneManager*> GLiteGPUSceneManagers;
 

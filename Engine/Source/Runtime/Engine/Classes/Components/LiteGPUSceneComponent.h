@@ -8,6 +8,15 @@
 #include "Components/MeshComponent.h"
 #include "LiteGPUSceneComponent.generated.h"
 
+struct FLiteGPUSceneInstance
+{
+	int64 IDWithinComponent;
+	FInt32Vector2 TilePosition;
+	FFloat16 XOffset, YOffset;
+	float ZOffset;
+	FFloat16 XRot, YRot, ZRot, Scale;
+};
+
 class FLiteGPUSceneProxy : public FPrimitiveSceneProxy
 {
 public:
@@ -41,14 +50,14 @@ public:
 
 	/** Add multiple instances to this component. Transform is given in local space of this component unless bWorldSpace is set. */
 	UFUNCTION(BlueprintCallable, Category = "Components|LiteGPUScene")
-	virtual TArray<int32> AddInstances(const TArray<FTransform>& InstanceTransforms, bool bShouldReturnIndices, bool bWorldSpace = false);
+	virtual TArray<int64> AddInstancesWS(const TArray<FTransform>& InstanceTransforms);
 
 	/** Get the transform for the instance specified. Instance is returned in local space of this component unless bWorldSpace is set.  Returns True on success. */
 	UFUNCTION(BlueprintCallable, Category = "Components|LiteGPUScene")
-	bool GetInstanceTransform(int32 InstanceIndex, FTransform& OutInstanceTransform, bool bWorldSpace = false) const;
+	bool GetInstanceTransformWS(int64 InstanceIndex, FTransform& OutInstanceTransform) const;
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LiteGPUScene")
-	virtual bool RemoveInstances(const TArray<int32>& InstancesToRemove);
+	virtual bool RemoveInstances(const TArray<int64>& InstancesToRemove);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LiteGPUScene")
 	virtual bool ClearInstances();
@@ -62,4 +71,9 @@ public:
 private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = StaticMesh, meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UStaticMesh> StaticMesh;
+
+	int64 NextInstanceID = 0;
+	TMap<int64, int64> IDToSlotMap;
+	TArray64<FLiteGPUSceneInstance> Instances;
+	TArray64<FLiteGPUSceneInstance> RemovedInstances;
 };

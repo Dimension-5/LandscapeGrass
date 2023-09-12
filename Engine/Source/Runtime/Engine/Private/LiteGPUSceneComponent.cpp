@@ -62,25 +62,81 @@ void ULiteGPUSceneComponent::ManagedTick(float DeltaTime)
 
 }
 
-TArray<int32> ULiteGPUSceneComponent::AddInstances(const TArray<FTransform>& InstanceTransforms, bool bShouldReturnIndices, bool bWorldSpace)
+TArray<int64> ULiteGPUSceneComponent::AddInstancesWS(const TArray<FTransform>& InstanceTransforms)
 {
-	UE_LOG(LogLiteGPUScene, Log, TEXT("Added %d Instances to LiteGPUScene."), InstanceTransforms.Num());
-	return {};
+	static auto CVarX = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.TileDistanceX"));
+	static auto CVarY = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.TileDistanceY"));
+	const float TileDistanceX = CVarX ? CVarX->GetFloat() : 1000.0f;
+	const float TileDistanceY = CVarY ? CVarY->GetFloat() : 1000.0f;
+	TArray<int64> InstanceIDs;
+	InstanceIDs.Reserve(InstanceTransforms.Num());
+	// TODO: parallel for ?
+	for (const auto& Transform : InstanceTransforms)
+	{
+		auto& NewInstance = Instances.AddZeroed_GetRef();
+		const auto TileX = Transform.GetLocation().X / TileDistanceX;
+		const auto TileY = Transform.GetLocation().Y / TileDistanceY;
+		NewInstance.IDWithinComponent = NextInstanceID++;
+		NewInstance.TilePosition = FInt32Vector2(TileX, TileY);
+		NewInstance.XOffset = Transform.GetLocation().X - TileX;
+		NewInstance.YOffset = Transform.GetLocation().Y - TileY;
+		NewInstance.ZOffset = Transform.GetLocation().Z;
+		NewInstance.XRot = FFloat16(Transform.GetRotation().Rotator().Roll);
+		NewInstance.YRot = FFloat16(Transform.GetRotation().Rotator().Pitch);
+		NewInstance.ZRot = FFloat16(Transform.GetRotation().Rotator().Yaw);
+		NewInstance.Scale = FFloat16(Transform.GetScale3D().X);
+		check(IDToSlotMap.Find(NewInstance.IDWithinComponent) == nullptr);
+		IDToSlotMap.Add(NewInstance.IDWithinComponent, Instances.Num() - 1);
+		InstanceIDs.Add(NewInstance.IDWithinComponent);
+	}
+	UE_LOG(LogLiteGPUScene, Log, TEXT("Added %d Instances to LiteGPUScene."), InstanceIDs.Num());
+	return InstanceIDs;
 }
 
-bool ULiteGPUSceneComponent::GetInstanceTransform(int32 InstanceIndex, FTransform& OutInstanceTransform, bool bWorldSpace) const
+bool ULiteGPUSceneComponent::GetInstanceTransformWS(int64 InstanceIndex, FTransform& OutInstanceTransform) const
 {
+	if (InstanceIndex < 0 || InstanceIndex >= Instances.Num())
+	{
+		return false;
+	}
+	static auto CVarX = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.TileDistanceX"));
+	static auto CVarY = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.TileDistanceY"));
+	const float TileDistanceX = CVarX ? CVarX->GetFloat() : 1000.0f;
+	const float TileDistanceY = CVarY ? CVarY->GetFloat() : 1000.0f;
+	const auto Slot = IDToSlotMap.FindRef(InstanceIndex);
+	const auto& Instance = Instances[Slot];
+	const auto TileX = Instance.TilePosition.X * TileDistanceX;
+	const auto TileY = Instance.TilePosition.Y * TileDistanceY;
+	OutInstanceTransform.SetLocation(FVector(TileX + Instance.XOffset, TileY + Instance.YOffset, Instance.ZOffset));
+	OutInstanceTransform.SetRotation(FQuat::MakeFromEuler(FVector(Instance.XRot, Instance.YRot, Instance.ZRot)));
+	OutInstanceTransform.SetScale3D(FVector(Instance.Scale, Instance.Scale, Instance.Scale));
 	return true;
 }
 
-bool ULiteGPUSceneComponent::RemoveInstances(const TArray<int32>& InstancesToRemove)
+bool ULiteGPUSceneComponent::RemoveInstances(const TArray<int64>& InstancesToRemove)
 {
-	return true;
+	for (auto ID : InstancesToRemove)
+	{
+		const auto Slot = IDToSlotMap.FindRef(ID);
+		if (Slot != INDEX_NONE)
+		{
+			Instances[Slot] = Instances.Last();
+			IDToSlotMap[Instances[Slot].IDWithinComponent] = Slot;
+			IDToSlotMap.Remove(ID);
+			RemovedInstances.Add(Instances[Slot]);
+		}
+	}
+	Instances.Shrink();
+	return false;
 }
 
 bool ULiteGPUSceneComponent::ClearInstances()
 {
-	return true;
+	RemovedInstances = MoveTemp(Instances);
+	Instances.SetNum(0, true);
+	IDToSlotMap.Empty();
+	IDToSlotMap.Shrink();
+	return false;
 }
 
 void ULiteGPUSceneComponent::OnRegister()

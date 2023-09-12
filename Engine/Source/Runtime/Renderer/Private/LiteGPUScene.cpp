@@ -230,59 +230,87 @@ void FLiteGPUScene::BuildScene(const TArray<TObjectPtr<UStaticMesh>> AllSourceMe
 
 void FLiteGPUScene::updateSectionInfos(FRDGBuilder& GraphBuilder)
 {
-	TResourceArray<FVector4f, VERTEXBUFFER_ALIGNMENT> SectionInfoBufferArray;
-	SectionInfoBufferArray.SetNumUninitialized(SceneData.TotalSectionNum * 2);
-	for (int32 SectionIndex = 0; SectionIndex < SceneData.TotalSectionNum; SectionIndex++)
+	if (SceneData.TotalSectionNum != 0)
 	{
-		const FLiteGPUSceneMeshSectionInfo& SectionInfo = SceneData.SectionInfos[SectionIndex];
-		SectionInfoBufferArray[2 * SectionIndex + 0] = FVector4f(SectionInfo.FirstIndexOffset, SectionInfo.IndexCount, SectionInfo.FirstVertexOffset, SectionInfo.VertexCount);
-		SectionInfoBufferArray[2 * SectionIndex + 1] = FVector4f(SectionInfo.ScreenSizeMin, SectionInfo.ScreenSizeMax, SectionInfo.MeshIndex, SectionInfo.MaterialIndex);
+		TResourceArray<FVector4f, VERTEXBUFFER_ALIGNMENT> SectionInfoBufferArray;
+		SectionInfoBufferArray.SetNumUninitialized(SceneData.TotalSectionNum * 2);
+		for (int32 SectionIndex = 0; SectionIndex < SceneData.TotalSectionNum; SectionIndex++)
+		{
+			const FLiteGPUSceneMeshSectionInfo& SectionInfo = SceneData.SectionInfos[SectionIndex];
+			SectionInfoBufferArray[2 * SectionIndex + 0] = FVector4f(SectionInfo.FirstIndexOffset, SectionInfo.IndexCount, SectionInfo.FirstVertexOffset, SectionInfo.VertexCount);
+			SectionInfoBufferArray[2 * SectionIndex + 1] = FVector4f(SectionInfo.ScreenSizeMin, SectionInfo.ScreenSizeMax, SectionInfo.MeshIndex, SectionInfo.MaterialIndex);
+		}
+		FResizeResourceSOAParams ResizeParams;
+		ResizeParams.NumBytes = SceneData.TotalSectionNum * 2 * sizeof(FVector4f);
+		ResizeParams.NumArrays = SceneData.TotalSectionNum * 2;
+		BufferState.SectionInfoBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, SectionInfoBuffer, ResizeParams, TEXT("LiteGPUScene.SectionInfo"));
 	}
-	FResizeResourceSOAParams ResizeParams;
-	ResizeParams.NumBytes = SceneData.TotalSectionNum * 2 * sizeof(FVector4f);
-	ResizeParams.NumArrays = SceneData.TotalSectionNum * 2;
-	BufferState.SectionInfoBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, SectionInfoBuffer, ResizeParams, TEXT("LiteGPUScene.SectionInfo"));
+	else
+	{
+		SectionInfoBuffer.SafeRelease();
+	}
 }
 
 void FLiteGPUScene::updateAABBData(FRDGBuilder& GraphBuilder)
 {
-	TResourceArray<FVector4f, VERTEXBUFFER_ALIGNMENT> AABBArray;
-	AABBArray.SetNumUninitialized(SceneData.InstanceTypeNum * 2);
-	FResizeResourceSOAParams ResizeParams;
-	ResizeParams.NumBytes = SceneData.InstanceTypeNum * 2 * sizeof(FVector4f);
-	ResizeParams.NumArrays = SceneData.InstanceTypeNum * 2;
-	BufferState.MeshAABBBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, MeshAABBBuffer, ResizeParams, TEXT("LiteGPUScene.AABB"));
+	if (SceneData.InstanceTypeNum != 0)
+	{
+		TResourceArray<FVector4f, VERTEXBUFFER_ALIGNMENT> AABBArray;
+		AABBArray.SetNumUninitialized(SceneData.InstanceTypeNum * 2);
+		FResizeResourceSOAParams ResizeParams;
+		ResizeParams.NumBytes = SceneData.InstanceTypeNum * 2 * sizeof(FVector4f);
+		ResizeParams.NumArrays = SceneData.InstanceTypeNum * 2;
+		BufferState.MeshAABBBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, MeshAABBBuffer, ResizeParams, TEXT("LiteGPUScene.AABB"));
+	}
+	else
+	{
+		MeshAABBBuffer.SafeRelease();
+	}
 }
 
 void FLiteGPUScene::updateInstanceData(FRDGBuilder& GraphBuilder)
 {
 	const auto InstanceCapacity = SceneData.Active.InstanceCapacity;
+	if (InstanceCapacity != 0)
+	{
+		const auto IndicesSize = InstanceCapacity * sizeof(int32);
+		BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceIndicesBuffer, IndicesSize, TEXT("LiteGPUScene.Scales"));
 
-	const auto IndicesSize = InstanceCapacity * sizeof(int32);
-	BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceIndicesBuffer, IndicesSize, TEXT("LiteGPUScene.Scales"));
+		const auto TypesSize = InstanceCapacity * sizeof(int8);
+		BufferState.InstanceTypeBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceTypeBuffer, TypesSize, TEXT("LiteGPUScene.Types"));
 
-	const auto TypesSize = InstanceCapacity * sizeof(int8);
-	BufferState.InstanceTypeBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceTypeBuffer, TypesSize, TEXT("LiteGPUScene.Types"));
-		
-	const auto SectionNumsSize = InstanceCapacity * sizeof(uint8);
-	BufferState.InstanceSectionNumBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceSectionNumBuffer, SectionNumsSize, TEXT("LiteGPUScene.SectionNums"));
-		
-	const auto SectionIDsSize = InstanceCapacity * sizeof(uint8);
-	BufferState.InstanceSectionIDsBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceSectionIDsBuffer, SectionIDsSize, TEXT("LiteGPUScene.SectionIDs"));
-		
-	// TRANSFORMS
+		const auto SectionNumsSize = InstanceCapacity * sizeof(uint8);
+		BufferState.InstanceSectionNumBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceSectionNumBuffer, SectionNumsSize, TEXT("LiteGPUScene.SectionNums"));
 
-	const auto TilePosesSize = InstanceCapacity * sizeof(FInt32Vector2);
-	BufferState.InstanceTilePosBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceTilePosBuffer, TilePosesSize, TEXT("LiteGPUScene.TilePoses"));
+		const auto SectionIDsSize = InstanceCapacity * sizeof(uint8);
+		BufferState.InstanceSectionIDsBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceSectionIDsBuffer, SectionIDsSize, TEXT("LiteGPUScene.SectionIDs"));
 
-	const auto XYsSize = InstanceCapacity * sizeof(FLiteGPUHalf2);
-	BufferState.InstanceXYBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceXYBuffer, XYsSize, TEXT("LiteGPUScene.InstanceXYs"));
-	
-	const auto ZWsSize = InstanceCapacity * sizeof(FVector2f);
-	BufferState.InstanceZWBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceZWBuffer, ZWsSize, TEXT("LiteGPUScene.InstanceZWs"));
-	
-	const auto RotScalesSize = InstanceCapacity * sizeof(FLiteGPUHalf4);
-	BufferState.InstanceRotScaleBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceRotScaleBuffer, RotScalesSize, TEXT("LiteGPUScene.InstanceRotScales"));
+		// TRANSFORMS
+
+		const auto TilePosesSize = InstanceCapacity * sizeof(FInt32Vector2);
+		BufferState.InstanceTilePosBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceTilePosBuffer, TilePosesSize, TEXT("LiteGPUScene.TilePoses"));
+
+		const auto XYsSize = InstanceCapacity * sizeof(FLiteGPUHalf2);
+		BufferState.InstanceXYBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceXYBuffer, XYsSize, TEXT("LiteGPUScene.InstanceXYs"));
+
+		const auto ZWsSize = InstanceCapacity * sizeof(FVector2f);
+		BufferState.InstanceZWBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceZWBuffer, ZWsSize, TEXT("LiteGPUScene.InstanceZWs"));
+
+		const auto RotScalesSize = InstanceCapacity * sizeof(FLiteGPUHalf4);
+		BufferState.InstanceRotScaleBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceRotScaleBuffer, RotScalesSize, TEXT("LiteGPUScene.InstanceRotScales"));
+	}
+	else
+	{
+		InstanceIndicesBuffer.SafeRelease();
+		InstanceTypeBuffer.SafeRelease();
+		InstanceSectionNumBuffer.SafeRelease();
+		InstanceSectionIDsBuffer.SafeRelease();
+
+		InstanceTilePosBuffer.SafeRelease();
+		InstanceXYBuffer.SafeRelease();
+		InstanceZWBuffer.SafeRelease();
+		InstanceRotScaleBuffer.SafeRelease();
+	}
 }
 
 void FLiteGPUScene::UpdateScene(FRDGBuilder& GraphBuilder)
@@ -320,6 +348,19 @@ void FLiteGPUSceneMeshIndexBuffer::InitRHI(FRHICommandListBase& RHICmdList)
 
 	IndicesNum = Indices.Num();
 	Indices.Empty();
+}
+
+FLiteGPUCombinedBuffer::FLiteGPUCombinedBuffer()
+	: VertexBuffer(nullptr), IndexBuffer(nullptr)
+	, UsedBytes(0), VertexNum(0)
+	, IndiceNum(0), bIntialized(false)
+{
+
+}
+
+FLiteGPUCombinedBuffer::~FLiteGPUCombinedBuffer()
+{
+	Release_AnyThread();
 }
 
 void FLiteGPUCombinedBuffer::Initialize(const TArray<FLiteGPUSceneMeshVertex>& Vertices, const TArray<uint32>& Indices)
@@ -369,4 +410,13 @@ void FLiteGPUCombinedBuffer::Release_RenderingThread()
 		VertexBuffer = nullptr;
 		IndexBuffer = nullptr;
 	}
+}
+
+void FLiteGPUCombinedBuffer::Release_AnyThread()
+{
+	ENQUEUE_RENDER_COMMAND(FLiteGPUCombinedBuffer_Release)(
+		[this](FRHICommandListImmediate& RHICmdList)
+		{
+			Release_RenderingThread();
+		});
 }
