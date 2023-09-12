@@ -185,7 +185,7 @@ void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSour
 	SceneData.InstanceTypeNum = SceneData.SourceMeshes.Num();
 	SceneData.TotalSectionNum = SceneData.SectionInfos.Num();
 	SceneData.SectionMeshIndices.SetNum(SceneData.TotalSectionNum);
-	SceneData.Active.SectionInstanceNums.SetNum(SceneData.TotalSectionNum);
+	SceneData.SectionInstanceNums.SetNum(SceneData.TotalSectionNum);
 	// Collects the <patchid, meshid> array
 	int32 PatchIndex = 0;
 	for (auto& Pair : CombinedData.SectionsMap)
@@ -270,9 +270,11 @@ void FLiteGPUScene::updateAABBData(FRDGBuilder& GraphBuilder)
 
 void FLiteGPUScene::updateInstanceData(FRDGBuilder& GraphBuilder)
 {
-	const auto InstanceCapacity = SceneData.Active.InstanceCapacity;
+	const auto InstanceCapacity = SceneData.InstanceCapacity;
 	if (InstanceCapacity != 0)
 	{
+		// TYPE & SECTION INFOS
+
 		const auto IndicesSize = InstanceCapacity * sizeof(int32);
 		BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceIndicesBuffer, IndicesSize, TEXT("LiteGPUScene.Scales"));
 

@@ -109,6 +109,16 @@ void ALiteGPUSceneManager::UnregisterAllComponents(bool bForReregister)
 	Super::UnregisterAllComponents(bForReregister);
 }
 
+void ALiteGPUSceneManager::OnAdd(const TArrayView<FLiteGPUSceneInstance> Instances)
+{
+
+}
+
+void ALiteGPUSceneManager::OnRemove(const TArrayView<FLiteGPUSceneInstance> Instances)
+{
+
+}
+
 void ALiteGPUSceneManager::BuildLiteGPUScene()
 {
 	const auto StartTime = FDateTime::UtcNow();
@@ -146,19 +156,21 @@ void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENa
 	bool bEnableLiteGPUScene = CVarEnable ? CVarEnable->GetInt() > 0 : false;
 	if (bEnableLiteGPUScene)
 	{
-		ENQUEUE_RENDER_COMMAND(UpdateLiteGPUScene)(
-			[this](FRHICommandListImmediate& RHICmdList)
-			{
-				if (Scene.IsValid())
+		for (auto Component : Components)
+		{
+			Component->Handler = this;
+			Component->ManagedTick(DeltaTime);
+		}		
+
+		if (Scene.IsValid())
+		{
+			ENQUEUE_RENDER_COMMAND(UpdateLiteGPUScene)(
+				[this](FRHICommandListImmediate& RHICmdList)
 				{
 					FRDGBuilder GraphBuilder(RHICmdList);
 					Scene->UpdateScene(GraphBuilder);
 					GraphBuilder.Execute();
-				}
-			});
-		for (auto Component : Components)
-		{
-			Component->ManagedTick(DeltaTime);
+				});
 		}
 	}
 }

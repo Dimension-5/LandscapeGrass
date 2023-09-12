@@ -169,14 +169,6 @@ struct FLiteGPUSceneUpdate
 	TArray<uint8> InstanceSectionNums;
 };
 
-struct FLiteGPUSceneActive
-{
-	TArray<int32> SectionInstanceNums; // Number of instances that references the section
-	int32 InstanceNum = 0;
-	int32 InstanceCapacity = 1048 * 1024 * 64;
-	bool bUpdateFrame = false;
-};
-
 struct FLiteGPUSceneData
 {
 	// const per build
@@ -197,8 +189,15 @@ struct FLiteGPUSceneData
 	int32 InstanceTypeNum = 0;
 	// const per build
 
-	FLiteGPUSceneUpdate Update;
-	FLiteGPUSceneActive Active;
+	TArray<int32> SectionInstanceNums; // Number of instances that references the section
+	int32 InstanceNum = 0;
+	int32 InstanceCapacity = 1048 * 1024 * 64;
+	bool bUpdateFrame = false;
+
+	TQueue<FLiteGPUSceneUpdate, EQueueMode::Spsc> Updates;
+	FCriticalSection UpdatesMutex;
+
+	RENDERER_API void EnqueueUpdates();
 };
 
 struct FLiteGPUBufferState

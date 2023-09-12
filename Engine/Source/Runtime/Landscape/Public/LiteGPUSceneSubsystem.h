@@ -2,6 +2,7 @@
 #pragma once
 #include "LiteGPUScene.h"
 #include "Subsystems/EngineSubsystem.h"
+#include "Components/LiteGPUSceneComponent.h"
 #include "LiteGPUSceneSubsystem.generated.h"
 
 class ULiteGPUSceneComponent;
@@ -39,10 +40,13 @@ public:
 };
 
 UCLASS(BlueprintType, Blueprintable, hidecategories = (Collision, Brush, Attachment, Physics, Volume))
-class LANDSCAPE_API ALiteGPUSceneManager : public AActor
+class LANDSCAPE_API ALiteGPUSceneManager : public AActor, public ILiteGPUSceneInstanceHandler
 {
 	GENERATED_BODY()
 public:
+	virtual void OnAdd(const TArrayView<FLiteGPUSceneInstance> Instances) override;
+	virtual void OnRemove(const TArrayView<FLiteGPUSceneInstance> Instances) override;
+	
 	UFUNCTION(BlueprintPure, meta = (WorldContext = WorldContext), Category = "ALiteGPUSceneManager")
 	static ALiteGPUSceneManager* Get(const UObject* WorldContext);
 	

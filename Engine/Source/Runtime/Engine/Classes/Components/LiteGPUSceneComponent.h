@@ -17,6 +17,12 @@ struct FLiteGPUSceneInstance
 	FFloat16 XRot, YRot, ZRot, Scale;
 };
 
+struct ILiteGPUSceneInstanceHandler
+{
+	virtual void OnAdd(const TArrayView<FLiteGPUSceneInstance> Instances) = 0;
+	virtual void OnRemove(const TArrayView<FLiteGPUSceneInstance> Instances) = 0;
+};
+
 class FLiteGPUSceneProxy : public FPrimitiveSceneProxy
 {
 public:
@@ -74,6 +80,8 @@ private:
 
 	int64 NextInstanceID = 0;
 	TMap<int64, int64> IDToSlotMap;
-	TArray64<FLiteGPUSceneInstance> Instances;
-	TArray64<FLiteGPUSceneInstance> RemovedInstances;
+	TArray64<FLiteGPUSceneInstance> PersistantInstances;
+
+	friend class ALiteGPUSceneManager;
+	ILiteGPUSceneInstanceHandler* Handler;
 };
