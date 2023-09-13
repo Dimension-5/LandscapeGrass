@@ -208,6 +208,10 @@ public:
 	virtual void UpdateDecalFadeInTime(UDecalComponent* Component) = 0;
 	virtual void BatchUpdateDecals(TArray<FDeferredDecalUpdateParams>&& UpdateParams) = 0;
 
+	// ++[D5]
+	virtual void AddOrRemoveLiteGPUSceneProxy_RenderingThread(class FLiteGPUSceneProxy* Proxy, bool bAdd) {}
+	// --[D5]
+
 	/** Adds a reflection capture to the scene. */
 	virtual void AddReflectionCapture(class UReflectionCaptureComponent* Component) {}
 

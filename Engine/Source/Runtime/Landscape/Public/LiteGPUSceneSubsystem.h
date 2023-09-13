@@ -40,53 +40,6 @@ public:
 	void BuildLiteGPUScenes();
 };
 
-class FLiteGPUSceneProxy : public FPrimitiveSceneProxy
-{
-public:
-	SIZE_T GetTypeHash() const override
-	{
-		static size_t UniquePointer;
-		return reinterpret_cast<size_t>(&UniquePointer);
-	}
-
-	FLiteGPUSceneProxy(ULiteGPUSceneRenderComponent* Component, ERHIFeatureLevel::Type InFeatureLevel);
-	virtual ~FLiteGPUSceneProxy();
-
-	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
-
-	virtual bool CanBeOccluded() const override { return false; }
-	virtual uint32 GetMemoryFootprint(void) const override { return(sizeof(*this) + GetAllocatedSize()); }
-	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
-	virtual void PostUpdateBeforePresent(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily);
-	uint32 GetAllocatedSize(void) const { return FPrimitiveSceneProxy::GetAllocatedSize(); }
-	void DrawMeshBatches(int32 ViewIndex, const FSceneView* View, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector) const;
-	void Init_RenderingThread();
-	LANDSCAPE_API bool IsInitialized() const;
-
-	TSharedPtr<FLiteGPUScene> Scene = nullptr;
-	FLiteGPUSceneVertexFactory* pGPUDrivenVertexFactory = nullptr;
-	FLiteGPUSceneVertexFactoryUserData* pVFUserData = nullptr;
-	TMap<FMaterialRenderProxy*, TArray<int32>> MaterialToSectionIDsMap;
-	TArray<FLiteGPUSceneMeshSectionInfo> AllSections;
-};
-
-UCLASS()
-class LANDSCAPE_API ULiteGPUSceneRenderComponent : public UPrimitiveComponent
-{
-	GENERATED_BODY()
-
-	virtual void OnRegister() override;
-	virtual void OnUnregister() override;
-	FPrimitiveSceneProxy* CreateSceneProxy() override;
-	void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /* = false */) const;
-
-	friend class ALiteGPUSceneManager;
-	friend class FLiteGPUSceneProxy;
-
-	ALiteGPUSceneManager* Owner = nullptr;
-	TSharedPtr<FLiteGPUScene> Scene = nullptr;
-};
-
 UCLASS(BlueprintType, Blueprintable, hidecategories = (Collision, Brush, Attachment, Physics, Volume))
 class LANDSCAPE_API ALiteGPUSceneManager : public AActor, public ILiteGPUSceneInstanceHandler
 {

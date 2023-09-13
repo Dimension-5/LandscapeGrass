@@ -55,6 +55,9 @@
 #include "GlobalDistanceField.h"
 #include "Algo/RemoveIf.h"
 #include "UObject/Package.h"
+// ++[D5]
+#include "Components/LiteGPUSceneComponent.h"
+// --[D5]
 
 /** Factor by which to grow occlusion tests **/
 #define OCCLUSION_SLOP (1.0f)
@@ -3001,6 +3004,11 @@ public:
 	/** The decals in the scene. */
 	TSparseArray<FDeferredDecalProxy*> Decals;
 
+	// ++[D5]
+	TArray<class FLiteGPUSceneProxy*> CachedLiteGPUScene;
+	// --[D5]
+
+
 	/** Potential capsule shadow casters registered to the scene. */
 	TArray<FPrimitiveSceneInfo*> DynamicIndirectCasterPrimitives; 
 
@@ -3172,6 +3180,10 @@ public:
 
 	FSpanAllocator PersistentPrimitiveIdAllocator;
 
+	//++[D5]
+	class FLiteGPUSceneBufferManager* pLiteGPUSceneBufferManager = nullptr;
+	//--[D5]
+
 #if WITH_EDITOR
 	/** Editor Pixel inspector */
 	FPixelInspectorData PixelInspectorData;
@@ -3221,6 +3233,9 @@ public:
 	virtual void UpdateDecalTransform(UDecalComponent* Decal) override;
 	virtual void UpdateDecalFadeOutTime(UDecalComponent* Decal) override;
 	virtual void UpdateDecalFadeInTime(UDecalComponent* Decal) override;
+	// ++[D5]
+	virtual void AddOrRemoveLiteGPUSceneProxy_RenderingThread(class FLiteGPUSceneProxy* Proxy, bool bAdd) override;
+	// --[D5]
 	virtual void BatchUpdateDecals(TArray<FDeferredDecalUpdateParams>&& UpdateParams) override;
 	virtual void AddReflectionCapture(UReflectionCaptureComponent* Component) override;
 	virtual void RemoveReflectionCapture(UReflectionCaptureComponent* Component) override;
