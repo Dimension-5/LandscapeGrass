@@ -230,10 +230,6 @@ protected:
 		float& OutScreenSizeMin, float& OutScreenSizeMax);
 
 	int32 PerSectionMaxNum = 0;
-	TArray64<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
-	TArray64<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
-	TArray64<FVector2D> InstanceZWOffsets; // [Z-Offset, TileIndex]
-	TArray64<FLiteGPUHalf4> InstanceRotationScales; // [X-Rotation, Y-Rotation, Z-Rotation, Scale]
 
 	FLiteGPUCombinedData CombinedData;
 	FLiteGPUSceneData SceneData;
@@ -247,7 +243,6 @@ protected:
 	FRDGAsyncScatterUploadBuffer MeshAABBUploadBuffer;
 
 	TRefCountPtr<FRDGPooledBuffer> InstanceIndicesBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceIndicesUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceTypeBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceTypeUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectionNumBuffer;
