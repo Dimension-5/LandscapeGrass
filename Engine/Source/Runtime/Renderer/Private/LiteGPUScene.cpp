@@ -295,26 +295,20 @@ DECLARE_GPU_STAT(LiteGPUSceneUpdate)
 
 void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 {
-	const auto InstanceCapacity = SceneData.InstanceCapacity;
-	if (InstanceCapacity != 0)
+	const auto Capacity = SceneData.InstanceCapacity;
+	if (Capacity != 0)
 	{
 		RDG_GPU_STAT_SCOPE(GraphBuilder, LiteGPUSceneUpdate);
 
 		// TYPE & SECTION INFOS
-		const auto IndicesSize = InstanceCapacity * sizeof(int32);
-		BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceIndicesBuffer, IndicesSize, TEXT("LiteGPUScene.Indices"));
-		const auto AttrsSize = InstanceCapacity * sizeof(FLiteGPUInstanceAttribute);
-		BufferState.InstanceAttributeBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceAttributeBuffer, AttrsSize, TEXT("LiteGPUScene.Attributes"));
+		BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceIndicesBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.Indices"));
+		BufferState.InstanceAttributeBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceAttributeBuffer, Capacity * sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Attributes"));
 
 		// TRANSFORMS
-		const auto TilePosesSize = InstanceCapacity * sizeof(FInt32Vector2);
-		BufferState.InstanceTilePosBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceTilePosBuffer, TilePosesSize, TEXT("LiteGPUScene.TilePoses"));
-		const auto XYsSize = InstanceCapacity * sizeof(FLiteGPUHalf2);
-		BufferState.InstanceXYBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceXYBuffer, XYsSize, TEXT("LiteGPUScene.InstanceXYs"));
-		const auto ZWsSize = InstanceCapacity * sizeof(FVector2f);
-		BufferState.InstanceZWBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceZWBuffer, ZWsSize, TEXT("LiteGPUScene.InstanceZWs"));
-		const auto RotScalesSize = InstanceCapacity * sizeof(FLiteGPUHalf4);
-		BufferState.InstanceRotScaleBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceRotScaleBuffer, RotScalesSize, TEXT("LiteGPUScene.InstanceRotScales"));
+		BufferState.InstanceXYBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceXYBuffer, Capacity * sizeof(FLiteGPUHalf2), TEXT("LiteGPUScene.InstanceXYs"));
+		BufferState.InstanceZBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceZBuffer, Capacity * sizeof(float), TEXT("LiteGPUScene.InstanceZs"));
+		BufferState.InstanceSectorIDBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceSectorIDBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.SectorIDs"));
+		BufferState.InstanceRotScaleBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceRotScaleBuffer, Capacity * sizeof(FLiteGPUHalf4), TEXT("LiteGPUScene.InstanceRotScales"));
 		
 		FLiteGPUSceneUpdate Update;
 		{
@@ -327,60 +321,59 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 		const auto UploadCount = Update.InstanceNum;
 		struct FTaskContext
 		{
-			FRDGScatterUploader* InstanceTilePosUploader = nullptr;
 			FRDGScatterUploader* InstanceXYUploader = nullptr;
-			FRDGScatterUploader* InstanceZWUploader = nullptr;
+			FRDGScatterUploader* InstanceZUploader = nullptr;
+			FRDGScatterUploader* InstanceSectorIDUploader = nullptr;
 			FRDGScatterUploader* InstanceRotScaleUploader = nullptr;
 			FRDGScatterUploader* InstanceAttributeUploader = nullptr;
 		};
 		FTaskContext& TaskContext = *GraphBuilder.AllocObject<FTaskContext>();
-		TaskContext.InstanceTilePosUploader = InstanceTilePosUploadBuffer.Begin(GraphBuilder, BufferState.InstanceTilePosBuffer, UploadCount, sizeof(FInt32Vector2), TEXT("LiteGPUScene.Upload.TilePoses"));
 		TaskContext.InstanceXYUploader = InstanceXYUploadBuffer.Begin(GraphBuilder, BufferState.InstanceXYBuffer, UploadCount, sizeof(FLiteGPUHalf2), TEXT("LiteGPUScene.Upload.XYs"));
-		TaskContext.InstanceZWUploader = InstanceZWUploadBuffer.Begin(GraphBuilder, BufferState.InstanceZWBuffer, UploadCount, sizeof(FVector2f), TEXT("LiteGPUScene.Upload.ZWs"));
+		TaskContext.InstanceZUploader = InstanceZUploadBuffer.Begin(GraphBuilder, BufferState.InstanceZBuffer, UploadCount, sizeof(float), TEXT("LiteGPUScene.Upload.Zs"));
+		TaskContext.InstanceSectorIDUploader = InstanceSectorIDUploadBuffer.Begin(GraphBuilder, BufferState.InstanceSectorIDBuffer, UploadCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.SectorIDs"));
 		TaskContext.InstanceRotScaleUploader = InstanceRotScaleUploadBuffer.Begin(GraphBuilder, BufferState.InstanceRotScaleBuffer, UploadCount, sizeof(FLiteGPUHalf4), TEXT("LiteGPUScene.Upload.RotScales"));
 		TaskContext.InstanceAttributeUploader = InstanceAttributeUploadBuffer.Begin(GraphBuilder, BufferState.InstanceAttributeBuffer, UploadCount, sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Upload.Attributes"));
 		GraphBuilder.AddCommandListSetupTask([this, &TaskContext, Update](FRHICommandListBase& RHICmdList)
 			{
 				SCOPED_NAMED_EVENT(UpdateLiteGPUScene_Instances, FColor::Green);
 
-				LockIfValid(RHICmdList, TaskContext.InstanceTilePosUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceXYUploader);
-				LockIfValid(RHICmdList, TaskContext.InstanceZWUploader);
+				LockIfValid(RHICmdList, TaskContext.InstanceZUploader);
+				LockIfValid(RHICmdList, TaskContext.InstanceSectorIDUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceRotScaleUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceAttributeUploader);
 
 				for (auto Index : Update.InstanceIndices)
 				{
-					TaskContext.InstanceTilePosUploader->Add(Index, SceneData.TilesPositions.GetData() + Index);
 					TaskContext.InstanceXYUploader->Add(Index, SceneData.InstanceXYOffsets.GetData() + Index);
-					TaskContext.InstanceZWUploader->Add(Index, SceneData.InstanceZWOffsets.GetData() + Index);
+					TaskContext.InstanceZUploader->Add(Index, SceneData.InstanceZOffsets.GetData() + Index);
+					TaskContext.InstanceSectorIDUploader->Add(Index, SceneData.InstanceSectorIDs.GetData() + Index);
 					TaskContext.InstanceRotScaleUploader->Add(Index, SceneData.InstanceRotationScales.GetData() + Index);
 
 					FLiteGPUInstanceAttribute Attribute;
 					Attribute.Type = SceneData.InstanceTypes[Index];
 					Attribute.SectionID = SceneData.InstanceSectionIDs[Index];
 					Attribute.SectionNum = SceneData.InstanceSectionNums[Index];
-					auto pAttribute = static_cast<FLiteGPUInstanceAttribute*>(TaskContext.InstanceAttributeUploader->Add_GetRef(Index));
-					*pAttribute = Attribute;
-			}
+					TaskContext.InstanceAttributeUploader->Add(Index, &Attribute);
+				}
 
-			UnlockIfValid(RHICmdList, TaskContext.InstanceTilePosUploader);
 			UnlockIfValid(RHICmdList, TaskContext.InstanceXYUploader);
-			UnlockIfValid(RHICmdList, TaskContext.InstanceZWUploader);
+			UnlockIfValid(RHICmdList, TaskContext.InstanceZUploader);
+			UnlockIfValid(RHICmdList, TaskContext.InstanceSectorIDUploader);
 			UnlockIfValid(RHICmdList, TaskContext.InstanceRotScaleUploader);
 			UnlockIfValid(RHICmdList, TaskContext.InstanceAttributeUploader);
 		});
 		{
-			InstanceTilePosUploadBuffer.End(GraphBuilder, TaskContext.InstanceTilePosUploader);
 			InstanceXYUploadBuffer.End(GraphBuilder, TaskContext.InstanceXYUploader);
-			InstanceZWUploadBuffer.End(GraphBuilder, TaskContext.InstanceZWUploader);
+			InstanceZUploadBuffer.End(GraphBuilder, TaskContext.InstanceZUploader);
+			InstanceSectorIDUploadBuffer.End(GraphBuilder, TaskContext.InstanceSectorIDUploader);
 			InstanceRotScaleUploadBuffer.End(GraphBuilder, TaskContext.InstanceRotScaleUploader);
 			InstanceAttributeUploadBuffer.End(GraphBuilder, TaskContext.InstanceAttributeUploader);
 		}
 		{
-			InstanceTilePosUploadBuffer.Release();
 			InstanceXYUploadBuffer.Release();
-			InstanceZWUploadBuffer.Release();
+			InstanceZUploadBuffer.Release();
+			InstanceSectorIDUploadBuffer.Release();
 			InstanceRotScaleUploadBuffer.Release();
 			InstanceAttributeUploadBuffer.Release();
 		}
@@ -388,12 +381,11 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 	else
 	{
 		InstanceIndicesBuffer.SafeRelease();
-		InstanceAttributeBuffer.SafeRelease();
-
-		InstanceTilePosBuffer.SafeRelease();
 		InstanceXYBuffer.SafeRelease();
-		InstanceZWBuffer.SafeRelease();
+		InstanceZBuffer.SafeRelease();
+		InstanceSectorIDBuffer.SafeRelease();
 		InstanceRotScaleBuffer.SafeRelease();
+		InstanceAttributeBuffer.SafeRelease();
 	}
 }
 

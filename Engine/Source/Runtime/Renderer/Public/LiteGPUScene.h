@@ -171,23 +171,20 @@ struct FLiteGPUInstanceAttribute
 struct FLiteGPUSceneData
 {
 	// const per build
-	TArray64<FLiteGPUSceneMeshSectionInfo> SectionInfos;
-	int32 TotalSectionNum = 0;
-	TArray64<TObjectPtr<UStaticMesh>> SourceMeshes;
-	/*
-	 * Array which stores the AAbb data of the instances, the length is equal instance_num x 2 x sizeof(Vector4).
-	 * 2 stands for the BottomLeft and Top Right Pos of the AABB box
-	 */
-	TArray64<uint8> SectionAABBData;
 	int32 InstanceTypeNum = 0;
+	int32 TotalSectionNum = 0;
+	TArray64<uint8> SectionAABBData;
+	TArray64<TObjectPtr<UStaticMesh>> SourceMeshes;
+	TArray64<FLiteGPUSceneMeshSectionInfo> SectionInfos;
 	// const per build
 
 	int32 InstanceNum = 0;
 	int32 InstanceCapacity = 0;
-	TArray64<int32> SectionInstanceNums; // Number of instances that references the section
-	TArray64<FInt32Vector2> TilesPositions; // [PivotX, PivotY]
+	TArray64<uint32> SectionInstanceNums; // Number of instances that references the section
+
 	TArray64<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
-	TArray64<FVector2f> InstanceZWOffsets; // [Z-Offset, TileIndex]
+	TArray64<float> InstanceZOffsets;
+	TArray64<uint32> InstanceSectorIDs;
 	TArray64<FLiteGPUHalf4> InstanceRotationScales; // [X-Rotation, Y-Rotation, Z-Rotation, Scale]
 	TArray64<uint8> InstanceTypes;
 	TArray64<uint8> InstanceSectionIDs;
@@ -204,9 +201,9 @@ struct FLiteGPUBufferState
 	FRDGBuffer* InstanceIndicesBuffer = nullptr;
 	FRDGBuffer* InstanceAttributeBuffer = nullptr;
 
-	FRDGBuffer* InstanceTilePosBuffer = nullptr;
 	FRDGBuffer* InstanceXYBuffer = nullptr;
-	FRDGBuffer* InstanceZWBuffer = nullptr;
+	FRDGBuffer* InstanceZBuffer = nullptr;
+	FRDGBuffer* InstanceSectorIDBuffer = nullptr;
 	FRDGBuffer* InstanceRotScaleBuffer = nullptr;
 };
 
@@ -252,12 +249,12 @@ protected:
 	TRefCountPtr<FRDGPooledBuffer> InstanceAttributeBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceAttributeUploadBuffer;
 
-	TRefCountPtr<FRDGPooledBuffer> InstanceTilePosBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceTilePosUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceXYBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceXYUploadBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceZWBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceZWUploadBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceZBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceZUploadBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceSectorIDUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceRotScaleBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceRotScaleUploadBuffer;
 

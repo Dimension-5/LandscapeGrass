@@ -124,9 +124,9 @@ void ALiteGPUSceneManager::OnAdd(TObjectPtr<ULiteGPUSceneComponent> Comp, const 
 		{
 			const int32 NewInstanceIndex = IndexOffset + OldInstanceNum;
 			const auto& ToAdd = Instances[IndexOffset];
-			SceneData.TilesPositions.Add(ToAdd.TilePosition);
 			SceneData.InstanceXYOffsets.Add({ ToAdd.XOffset, ToAdd.YOffset });
-			SceneData.InstanceZWOffsets.Add({ ToAdd.ZOffset, -1/*TODO: Tile CullingID*/});
+			SceneData.InstanceZOffsets.Add(ToAdd.ZOffset);
+			SceneData.InstanceSectorIDs.Add(-1/*TODO: Sector CullingID*/);
 			SceneData.InstanceRotationScales.Add({ ToAdd.XRot, ToAdd.YRot, ToAdd.ZRot, ToAdd.Scale });
 			SceneData.InstanceTypes.Add(MeshIndex);
 			check(CIDToPID.FindOrAdd(Comp).Find(ToAdd.IDWithinComponent) == nullptr);
@@ -182,9 +182,9 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 			const auto RemoveIndex = CIDToPID.FindOrAdd(Comp)[Instances[IndexOffset].IDWithinComponent];
 			if (LastIndex != RemoveIndex)
 			{
-				SceneData.TilesPositions[RemoveIndex] = SceneData.TilesPositions[LastIndex];
 				SceneData.InstanceXYOffsets[RemoveIndex] = SceneData.InstanceXYOffsets[LastIndex];
-				SceneData.InstanceZWOffsets[RemoveIndex] = SceneData.InstanceZWOffsets[LastIndex];
+				SceneData.InstanceZOffsets[RemoveIndex] = SceneData.InstanceZOffsets[LastIndex];
+				SceneData.InstanceSectorIDs[RemoveIndex] = SceneData.InstanceSectorIDs[LastIndex];
 				SceneData.InstanceRotationScales[RemoveIndex] = SceneData.InstanceRotationScales[LastIndex];
 				SceneData.InstanceTypes[RemoveIndex] = SceneData.InstanceTypes[LastIndex];
 
@@ -204,10 +204,9 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 			CIDToPID.FindOrAdd(Comp).Remove(Instances[IndexOffset].IDWithinComponent);
 		}
 
-		SceneData.TilesPositions.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceXYOffsets.SetNum(SceneData.InstanceNum);
-		SceneData.InstanceZWOffsets.SetNum(SceneData.InstanceNum);
-		SceneData.InstanceRotationScales.SetNum(SceneData.InstanceNum);
+		SceneData.InstanceZOffsets.SetNum(SceneData.InstanceNum);;
+		SceneData.InstanceSectorIDs.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceTypes.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceSectionNums.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceSectionIDs.SetNum(Scene->PerSectionMaxNum * SceneData.InstanceNum);
