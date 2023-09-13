@@ -12,11 +12,7 @@ FLiteGPUSceneVertexFactory::FLiteGPUSceneVertexFactory(ERHIFeatureLevel::Type In
 void FLiteGPUSceneVertexFactoryShaderParameters::Bind(const FShaderParameterMap& ParameterMap)
 {
 	FLocalVertexFactoryShaderParametersBase::Bind(ParameterMap);
-	VertexFetch_SectorInfoParameter.Bind(ParameterMap, TEXT("VertexFetch_SectorInfoParameter"));
-	VertexFetch_PerInstanceXYParameter.Bind(ParameterMap, TEXT("VertexFetch_PerInstanceXYParameter"));
-	VertexFetch_PerInstanceZParameter.Bind(ParameterMap, TEXT("VertexFetch_PerInstanceZParameter"));
-	VertexFetch_PerInstanceSectorIDParameter.Bind(ParameterMap, TEXT("VertexFetch_PerInstanceSectorIDParameter"));
-	VertexFetch_PerInstanceRotScaleParameter.Bind(ParameterMap, TEXT("VertexFetch_PerInstanceRotScaleParameter"));
+	VertexFetch_PerInstanceTransformParameter.Bind(ParameterMap, TEXT("VertexFetch_PerInstanceTransformParameter"));
 }
 
 void FLiteGPUSceneVertexFactoryShaderParameters::GetElementShaderBindings(const class FSceneInterface* Scene
@@ -34,16 +30,8 @@ void FLiteGPUSceneVertexFactoryShaderParameters::GetElementShaderBindings(const 
 	if (FLiteGPUSceneProxy* SceneProxy = BatchElementParams->SceneProxy)
 	{
 		const auto& BufferStates = SceneProxy->Scene->BufferState;
-		auto SectorInfoSRV = BufferStates.SectorInfoBufferSRV->GetRHI();
-		auto XYBufferSRV = BufferStates.InstanceXYBufferSRV->GetRHI();
-		auto ZBufferSRV = BufferStates.InstanceZBufferSRV->GetRHI();
-		auto SectorIDsSRV = BufferStates.InstanceSectorIDBufferSRV->GetRHI();
-		auto RotScaleBufferSRV = BufferStates.InstanceRotScaleBufferSRV->GetRHI();
-		ShaderBindings.Add(VertexFetch_SectorInfoParameter, SectorInfoSRV);
-		ShaderBindings.Add(VertexFetch_PerInstanceXYParameter, XYBufferSRV);
-		ShaderBindings.Add(VertexFetch_PerInstanceZParameter, ZBufferSRV);
-		ShaderBindings.Add(VertexFetch_PerInstanceSectorIDParameter, SectorIDsSRV);
-		ShaderBindings.Add(VertexFetch_PerInstanceRotScaleParameter, RotScaleBufferSRV);
+		auto TransformBufferSRV = BufferStates.InstanceTransformBufferSRV->GetRHI();
+		ShaderBindings.Add(VertexFetch_PerInstanceTransformParameter, TransformBufferSRV);
 	}
 }
 

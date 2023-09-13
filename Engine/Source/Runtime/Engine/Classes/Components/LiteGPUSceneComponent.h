@@ -14,11 +14,8 @@ struct FLiteGPUSceneVertexFactoryUserData;
 
 struct FLiteGPUSceneInstance
 {
-	FInt64Vector2 SectorXY;
 	int64 IDWithinComponent;
-	FFloat16 XOffset, YOffset;
-	float ZOffset;
-	FFloat16 XRot, YRot, ZRot, Scale;
+	UE::Math::TTransform<float> Transform;
 };
 
 struct ILiteGPUSceneInstanceHandler
@@ -103,11 +100,8 @@ struct FLiteGPUSceneVertexFactoryShaderParameters : public FLocalVertexFactorySh
 	) const;
 
 private:
-	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_SectorInfoParameter);
-	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceXYParameter);
-	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceZParameter);
-	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceSectorIDParameter);
-	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceRotScaleParameter);
+	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceTransformParameter);
+	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceScale);
 };
 
 struct FLiteGPUSceneMeshVertexBuffer;

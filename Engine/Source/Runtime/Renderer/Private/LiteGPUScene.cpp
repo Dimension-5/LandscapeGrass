@@ -309,14 +309,10 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 		BufferState.SectorInfoBufferSRV = GraphBuilder.CreateSRV(BufferState.SectorInfoBuffer);
 
 		// TRANSFORMS
-		BufferState.InstanceXYBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceXYBuffer, Capacity * sizeof(FLiteGPUHalf2), TEXT("LiteGPUScene.InstanceXYs"));
-		BufferState.InstanceXYBufferSRV = GraphBuilder.CreateSRV(BufferState.InstanceXYBuffer);
-		BufferState.InstanceZBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceZBuffer, Capacity * sizeof(float), TEXT("LiteGPUScene.InstanceZs"));
-		BufferState.InstanceZBufferSRV = GraphBuilder.CreateSRV(BufferState.InstanceZBuffer);
+		BufferState.InstanceTransformBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceTransformBuffer, 4 * Capacity * sizeof(FVector4f), TEXT("LiteGPUScene.Transforms"));
+		BufferState.InstanceTransformBufferSRV = GraphBuilder.CreateSRV(BufferState.InstanceTransformBuffer);
 		BufferState.InstanceSectorIDBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceSectorIDBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.SectorIDs"));
 		BufferState.InstanceSectorIDBufferSRV = GraphBuilder.CreateSRV(BufferState.InstanceSectorIDBuffer);
-		BufferState.InstanceRotScaleBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceRotScaleBuffer, Capacity * sizeof(FLiteGPUHalf4), TEXT("LiteGPUScene.InstanceRotScales"));
-		BufferState.InstanceRotScaleBufferSRV = GraphBuilder.CreateSRV(BufferState.InstanceRotScaleBuffer);
 		
 		FLiteGPUSceneUpdate Update;
 		{
@@ -330,18 +326,14 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 		struct FTaskContext
 		{
 			FRDGScatterUploader* SectorInfoUploader = nullptr;
-			FRDGScatterUploader* InstanceXYUploader = nullptr;
-			FRDGScatterUploader* InstanceZUploader = nullptr;
+			FRDGScatterUploader* InstanceTransformUploader = nullptr;
 			FRDGScatterUploader* InstanceSectorIDUploader = nullptr;
-			FRDGScatterUploader* InstanceRotScaleUploader = nullptr;
 			FRDGScatterUploader* InstanceAttributeUploader = nullptr;
 		};
 		FTaskContext& TaskContext = *GraphBuilder.AllocObject<FTaskContext>();
 		TaskContext.SectorInfoUploader = SectorInfoUploadBuffer.Begin(GraphBuilder, BufferState.SectorInfoBuffer, SectorCount, sizeof(FSectorInfo), TEXT("LiteGPUScene.Upload.SectorInfos"));
-		TaskContext.InstanceXYUploader = InstanceXYUploadBuffer.Begin(GraphBuilder, BufferState.InstanceXYBuffer, InstanceCount, sizeof(FLiteGPUHalf2), TEXT("LiteGPUScene.Upload.XYs"));
-		TaskContext.InstanceZUploader = InstanceZUploadBuffer.Begin(GraphBuilder, BufferState.InstanceZBuffer, InstanceCount, sizeof(float), TEXT("LiteGPUScene.Upload.Zs"));
+		TaskContext.InstanceTransformUploader = InstanceTransformUploadBuffer.Begin(GraphBuilder, BufferState.InstanceTransformBuffer, 4 * InstanceCount, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.Transforms"));
 		TaskContext.InstanceSectorIDUploader = InstanceSectorIDUploadBuffer.Begin(GraphBuilder, BufferState.InstanceSectorIDBuffer, InstanceCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.SectorIDs"));
-		TaskContext.InstanceRotScaleUploader = InstanceRotScaleUploadBuffer.Begin(GraphBuilder, BufferState.InstanceRotScaleBuffer, InstanceCount, sizeof(FLiteGPUHalf4), TEXT("LiteGPUScene.Upload.RotScales"));
 		TaskContext.InstanceAttributeUploader = InstanceAttributeUploadBuffer.Begin(GraphBuilder, BufferState.InstanceAttributeBuffer, InstanceCount, sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Upload.Attributes"));
 		GraphBuilder.AddCommandListSetupTask(
 			[this, &TaskContext, Update](FRHICommandListBase& RHICmdList)
@@ -349,10 +341,8 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 				SCOPED_NAMED_EVENT(UpdateLiteGPUScene_Instances, FColor::Green);
 
 				LockIfValid(RHICmdList, TaskContext.SectorInfoUploader);
-				LockIfValid(RHICmdList, TaskContext.InstanceXYUploader);
-				LockIfValid(RHICmdList, TaskContext.InstanceZUploader);
+				LockIfValid(RHICmdList, TaskContext.InstanceTransformUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceSectorIDUploader);
-				LockIfValid(RHICmdList, TaskContext.InstanceRotScaleUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceAttributeUploader);
 
 				uint32 SectorIndex = 0;
@@ -364,10 +354,8 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 
 				for (auto Index : Update.InstanceIndices)
 				{
-					TaskContext.InstanceXYUploader->Add(Index, SceneData.InstanceXYOffsets.GetData() + Index);
-					TaskContext.InstanceZUploader->Add(Index, SceneData.InstanceZOffsets.GetData() + Index);
+					TaskContext.InstanceTransformUploader->Add(Index, SceneData.InstanceTransforms.GetData() + Index);
 					TaskContext.InstanceSectorIDUploader->Add(Index, SceneData.InstanceSectorIDs.GetData() + Index);
-					TaskContext.InstanceRotScaleUploader->Add(Index, SceneData.InstanceRotationScales.GetData() + Index);
 
 					FLiteGPUInstanceAttribute Attribute;
 					Attribute.Type = SceneData.InstanceTypes[Index];
@@ -377,36 +365,28 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 				}
 
 				UnlockIfValid(RHICmdList, TaskContext.SectorInfoUploader);
-				UnlockIfValid(RHICmdList, TaskContext.InstanceXYUploader);
-				UnlockIfValid(RHICmdList, TaskContext.InstanceZUploader);
+				UnlockIfValid(RHICmdList, TaskContext.InstanceTransformUploader);
 				UnlockIfValid(RHICmdList, TaskContext.InstanceSectorIDUploader);
-				UnlockIfValid(RHICmdList, TaskContext.InstanceRotScaleUploader);
 				UnlockIfValid(RHICmdList, TaskContext.InstanceAttributeUploader);
 			});
 		{
 			SectorInfoUploadBuffer.End(GraphBuilder, TaskContext.SectorInfoUploader);
-			InstanceXYUploadBuffer.End(GraphBuilder, TaskContext.InstanceXYUploader);
-			InstanceZUploadBuffer.End(GraphBuilder, TaskContext.InstanceZUploader);
+			InstanceTransformUploadBuffer.End(GraphBuilder, TaskContext.InstanceTransformUploader);
 			InstanceSectorIDUploadBuffer.End(GraphBuilder, TaskContext.InstanceSectorIDUploader);
-			InstanceRotScaleUploadBuffer.End(GraphBuilder, TaskContext.InstanceRotScaleUploader);
 			InstanceAttributeUploadBuffer.End(GraphBuilder, TaskContext.InstanceAttributeUploader);
 		}
 		{
 			SectorInfoUploadBuffer.Release();
-			InstanceXYUploadBuffer.Release();
-			InstanceZUploadBuffer.Release();
+			InstanceTransformUploadBuffer.Release();
 			InstanceSectorIDUploadBuffer.Release();
-			InstanceRotScaleUploadBuffer.Release();
 			InstanceAttributeUploadBuffer.Release();
 		}
 	}
 	else
 	{
 		InstanceIndicesBuffer.SafeRelease();
-		InstanceXYBuffer.SafeRelease();
-		InstanceZBuffer.SafeRelease();
+		InstanceTransformBuffer.SafeRelease();
 		InstanceSectorIDBuffer.SafeRelease();
-		InstanceRotScaleBuffer.SafeRelease();
 		InstanceAttributeBuffer.SafeRelease();
 	}
 }

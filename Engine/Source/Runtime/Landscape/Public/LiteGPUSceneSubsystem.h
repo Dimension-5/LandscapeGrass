@@ -66,6 +66,8 @@ public:
 	TSharedPtr<FLiteGPUScene> Scene = nullptr;
 	FLiteGPUSceneVertexFactory* pGPUDrivenVertexFactory = nullptr;
 	FLiteGPUSceneVertexFactoryUserData* pVFUserData = nullptr;
+	TMap<FMaterialRenderProxy*, TArray<int32>> MaterialToSectionIDsMap;
+	TArray<FLiteGPUSceneMeshSectionInfo> AllSections;
 };
 
 UCLASS()
@@ -76,6 +78,7 @@ class LANDSCAPE_API ULiteGPUSceneRenderComponent : public UPrimitiveComponent
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
 	FPrimitiveSceneProxy* CreateSceneProxy() override;
+	void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /* = false */) const;
 
 	friend class ALiteGPUSceneManager;
 	friend class FLiteGPUSceneProxy;

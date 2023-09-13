@@ -136,22 +136,6 @@ struct FLiteGPUViewData
 	FMatrix44f ProjMatrix;
 	FSphere3f ShadowBounds;
 	int32 MaxGPUInstanceToDraw = 0;
-	bool bGPUCulling = false;
-	bool bDirty = false;
-	bool bFirstGPUCullinged = false;
-	bool bCreateImposterBuffer = false;
-};
-
-struct FLiteGPUViewBuffers
-{
-	FRDGBufferHandle RWIndirectDrawDispatchIndiretBuffer;
-	FRDGBufferHandle RWInstanceIndiceBuffer;
-	FRDGBufferHandle RWIndirectDrawBuffer;
-	FRDGBufferHandle RWGPUUnCulledInstanceBuffer;
-	FRDGBufferHandle RWGPUUnCulledInstanceScreenSize;
-	FRDGBufferHandle RWGPUUnCulledInstanceNum;
-	FRDGBufferHandle RWDispatchStagingBuffer;
-	FRDGBufferHandle RWGPUUnCulledInstanceIndirectParameters;
 };
 
 struct FLiteGPUSceneUpdate
@@ -191,10 +175,8 @@ struct FLiteGPUSceneData
 
 	int32 InstanceNum = 0;
 	int32 InstanceCapacity = 0;
-	TArray64<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
-	TArray64<float> InstanceZOffsets;
+	TArray64<UE::Math::TTransform<float>> InstanceTransforms;
 	TArray64<uint32> InstanceSectorIDs;
-	TArray64<FLiteGPUHalf4> InstanceRotationScales; // [X-Rotation, Y-Rotation, Z-Rotation, Scale]
 	TArray64<uint8> InstanceTypes;
 	TArray64<uint8> InstanceSectionIDs;
 	TArray64<uint8> InstanceSectionNums;
@@ -205,7 +187,19 @@ struct FLiteGPUSceneData
 	TArray64<uint32> SectionInstanceNums; // Number of instances that references the section
 };
 
-struct FLiteGPUBufferState
+struct FLiteGPUViewBufferState
+{
+	FRDGBuffer* IndirectDrawDispatchIndiretBuffer;
+	FRDGBuffer* InstanceIndiceBuffer;
+	FRDGBuffer* IndirectDrawBuffer;
+	FRDGBuffer* UnCulledInstanceBuffer;
+	FRDGBuffer* UnCulledInstanceScreenSize;
+	FRDGBuffer* UnCulledInstanceNum;
+	FRDGBuffer* DispatchStagingBuffer;
+	FRDGBuffer* UnCulledInstanceIndirectParameters;
+};
+
+struct FLiteGPUSceneBufferState
 {
 	FRDGBuffer* SectionInfoBuffer = nullptr;
 	FRDGBuffer* MeshAABBBuffer = nullptr;
@@ -215,14 +209,10 @@ struct FLiteGPUBufferState
 	
 	FRDGBuffer* InstanceIndicesBuffer = nullptr;
 	FRDGBuffer* InstanceAttributeBuffer = nullptr;
-	FRDGBuffer* InstanceXYBuffer = nullptr;
-	FRDGBufferSRV* InstanceXYBufferSRV = nullptr;
-	FRDGBuffer* InstanceZBuffer = nullptr;
-	FRDGBufferSRV* InstanceZBufferSRV = nullptr;
+	FRDGBuffer* InstanceTransformBuffer = nullptr;
+	FRDGBufferSRV* InstanceTransformBufferSRV = nullptr;
 	FRDGBuffer* InstanceSectorIDBuffer = nullptr;
 	FRDGBufferSRV* InstanceSectorIDBufferSRV = nullptr;
-	FRDGBuffer* InstanceRotScaleBuffer = nullptr;
-	FRDGBufferSRV* InstanceRotScaleBufferSRV = nullptr;
 };
 
 struct RENDERER_API FLiteGPUScene
@@ -241,6 +231,7 @@ public:
 protected:
 	friend class FLiteGPUSceneProxy;
 	friend class ALiteGPUSceneManager;
+	friend class ULiteGPUSceneRenderComponent;
 	friend struct FLiteGPUSceneVertexFactoryShaderParameters;
 
 	void buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
@@ -268,20 +259,25 @@ protected:
 	TRefCountPtr<FRDGPooledBuffer> SectorInfoBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceIndicesBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceAttributeBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceXYBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceZBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceRotScaleBuffer;
 
 	FRDGAsyncScatterUploadBuffer SectorInfoUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceAttributeUploadBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceXYUploadBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceZUploadBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceTransformUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceSectorIDUploadBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceRotScaleUploadBuffer;
 
-	FLiteGPUViewBuffers ViewBuffers;
-	FLiteGPUBufferState BufferState;
+	FRDGBufferHandle RWIndirectDrawDispatchIndiretBuffer;
+	FRDGBufferHandle RWInstanceIndiceBuffer;
+	FRDGBufferHandle RWIndirectDrawBuffer;
+	FRDGBufferHandle RWUnCulledInstanceBuffer;
+	FRDGBufferHandle RWUnCulledInstanceScreenSize;
+	FRDGBufferHandle RWUnCulledInstanceNum;
+	FRDGBufferHandle RWDispatchStagingBuffer;
+	FRDGBufferHandle RWUnCulledInstanceIndirectParameters;
+
+	FLiteGPUViewBufferState ViewBufferState;
+	FLiteGPUSceneBufferState BufferState;
 	
 	FLiteGPUCounterBuffers CounterBuffers;
 };

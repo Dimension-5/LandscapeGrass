@@ -264,6 +264,14 @@ struct FMeshBatchElement
 	FColor SkinCacheDebugColor = FColor::White;
 #endif
 
+	// ++[D5]
+	uint32 FirstInstance;
+	uint32 IndirectDrawCount;
+	uint32 IndirectBufferStride;
+	uint32 IndirectCounterOffset;
+	FRHIBuffer* IndirectCounterBuffer;
+	//--[D5]
+
 	/**
 	 * Source instance scene data and payload data for dynamic primitives. Must be provided for dynamic primitives that have more than a single instance.
 	 * NOTE: The lifetime of the object pointed to is expected to match or exceed that of the mesh batch itself.
@@ -314,6 +322,13 @@ struct FMeshBatchElement
 #if UE_ENABLE_DEBUG_DRAWING
 	,	VisualizeElementIndex(INDEX_NONE)
 #endif
+		// ++[D5]
+		, FirstInstance(0)
+		, IndirectDrawCount(0)
+		, IndirectBufferStride(0)
+		, IndirectCounterOffset(0)
+		, IndirectCounterBuffer(nullptr)
+		// --[D5]
 	,	DynamicPrimitiveData(nullptr)
 	,	DynamicPrimitiveIndex(INDEX_NONE)
 	,	DynamicPrimitiveInstanceSceneDataOffset(INDEX_NONE)

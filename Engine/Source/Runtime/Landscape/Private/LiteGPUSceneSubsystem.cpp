@@ -8,7 +8,7 @@ static FAutoConsoleVariableRef CVarDrawLiteGPUScene(
 	TEXT("r.LiteGPUScene.Enable"),
 	sDisplayLiteGPUScene,
 	TEXT("Display GPUDriven Scene.\n"),
-	ECVF_Scalability
+	ECVF_Scalability | ECVF_RenderThreadSafe
 );
 
 static float sTileDistanceX = 1000.f;
@@ -78,6 +78,33 @@ FLiteGPUSceneProxy::FLiteGPUSceneProxy(ULiteGPUSceneRenderComponent* Component, 
 	: FPrimitiveSceneProxy(Component, TEXT("LiteGPUScene")),
 	  Scene(Component->Scene)
 {
+	// Build up a stats of <mat_proxy, patch_ids> map
+	for (auto& pair : Scene->CombinedData.SectionsMap)
+	{
+		int32 MappedMaterialIndex = pair.Key;
+		UMaterialInterface* Mat = Scene->CombinedData.Materials[MappedMaterialIndex];
+		if (Mat && Mat->GetRenderProxy())
+		{
+			FMaterialRenderProxy* MatProxy = Mat->GetRenderProxy();
+			const TArray<FLiteGPUSceneMeshSectionInfo>& PatchInfoArray = pair.Value;
+			for (const FLiteGPUSceneMeshSectionInfo& PatchInfo : PatchInfoArray)
+			{
+				int32 InsertPatchIndex = AllSections.Add(PatchInfo);
+				TArray<int32>* pPatchIndiceArray = MaterialToSectionIDsMap.Find(MatProxy);
+				if (pPatchIndiceArray)
+				{
+					pPatchIndiceArray->Add(InsertPatchIndex);
+				}
+				else
+				{
+					TArray<int32> PatchIndiceArray;
+					PatchIndiceArray.Add(InsertPatchIndex);
+					MaterialToSectionIDsMap.Add(MatProxy, PatchIndiceArray);
+				}
+			}
+		}
+	}
+
 	pGPUDrivenVertexFactory = new FLiteGPUSceneVertexFactory(InFeatureLevel);
 
 	pVFUserData = new FLiteGPUSceneVertexFactoryUserData();
@@ -130,6 +157,34 @@ void FLiteGPUSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>&
 {
 	const FSceneView* MainView = Views[0];
 	static auto CVarEnable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.Enable"));
+	bool bLiteGPUScene = CVarEnable && CVarEnable->GetInt() > 0;
+	if (!bLiteGPUScene || !IsInitialized())
+	{
+		return;
+	}
+	if (MainView->bIsSceneCapture || MainView->bIsReflectionCapture)
+	{
+		return;
+	}
+
+	for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
+	{
+		if (VisibilityMap & (1 << ViewIndex))
+		{
+			const FSceneView* View = Views[ViewIndex];
+			const FConvexVolume* ShadowFrustomView = View->GetDynamicMeshElementsShadowCullFrustum();
+			if (ShadowFrustomView)
+			{
+				return;
+			}
+			if (Scene->BufferState.InstanceTransformBufferSRV != nullptr)
+			{
+				// DispatchCulling();
+				// GenerateDrawcalls();
+				DrawMeshBatches(ViewIndex, View, ViewFamily, Collector);
+			}
+		}
+	}
 	return;
 }
 
@@ -138,14 +193,74 @@ void FLiteGPUSceneProxy::PostUpdateBeforePresent(const TArray<const FSceneView*>
 
 }
 
+struct LiteGPUSceneIndirectArguments
+{
+	static void Init(LiteGPUSceneIndirectArguments& ia)
+	{
+		ia.IndexCountPerInstance = 0;
+		ia.InstanceCount = 1;
+		ia.StartIndexLocation = 0;
+		ia.BaseVertexLocation = 0;
+		ia.StartInstanceLocation = 0;
+	}
+	uint32 IndexCountPerInstance;
+	uint32 InstanceCount;
+	uint32 StartIndexLocation;
+	int32 BaseVertexLocation;
+	uint32 StartInstanceLocation;
+};
+
 void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector) const
 {
-	return;
+	if (Scene->CombinedBuffer.IndexBuffer->IndicesNum <= 0)
+	{
+		return;
+	}
+	int32 IndirectDrawOffset = 0;
+	for (auto& Var : MaterialToSectionIDsMap)
+	{
+		const TArray<int32>& SectionIndices = Var.Value;
+
+		FMeshBatch& MeshBatch = Collector.AllocateMesh();
+		MeshBatch.bWireframe = false;
+		MeshBatch.VertexFactory = pGPUDrivenVertexFactory;
+		MeshBatch.MaterialRenderProxy = Var.Key;
+		MeshBatch.LODIndex = 0;
+		MeshBatch.Type = PT_TriangleList;
+		MeshBatch.DepthPriorityGroup = SDPG_World;
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+		MeshBatch.VisualizeHLODIndex = 0;
+#endif
+
+		FMeshBatchElement& BatchElement = MeshBatch.Elements[0];
+		BatchElement.IndexBuffer = Scene->CombinedBuffer.IndexBuffer;
+		BatchElement.PrimitiveUniformBuffer = GetUniformBuffer();
+		BatchElement.FirstIndex = 0;
+		BatchElement.NumPrimitives = 0;
+		BatchElement.MinVertexIndex = 0;
+		BatchElement.MaxVertexIndex = Scene->CombinedBuffer.VertexBuffer->VerticesNum - 1;
+
+		BatchElement.UserData = (void*)pVFUserData;
+		BatchElement.bUserDataIsColorVertexBuffer = false;
+		BatchElement.InstancedLODIndex = 0;
+		BatchElement.UserIndex = 0;
+		BatchElement.NumInstances = 1;
+
+		BatchElement.IndirectArgsBuffer = Scene->ViewBufferState.IndirectDrawBuffer->GetRHI();
+		BatchElement.IndirectArgsOffset = IndirectDrawOffset * sizeof(LiteGPUSceneIndirectArguments);
+
+		BatchElement.FirstInstance = 0;
+		BatchElement.IndirectDrawCount = MaterialToSectionIDsMap.Num();
+		BatchElement.IndirectBufferStride = sizeof(LiteGPUSceneIndirectArguments);
+
+		IndirectDrawOffset += SectionIndices.Num();
+		Collector.AddMesh(ViewIndex, MeshBatch);
+	}
 }
 
 bool FLiteGPUSceneProxy::IsInitialized() const
 {
-	return false;
+	return Scene.IsValid();
 }
 
 void FLiteGPUSceneProxy::Init_RenderingThread()
@@ -163,6 +278,16 @@ void ULiteGPUSceneRenderComponent::OnRegister()
 void ULiteGPUSceneRenderComponent::OnUnregister()
 {
 	Super::OnUnregister();
+}
+
+void ULiteGPUSceneRenderComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /* = false */) const
+{
+	Super::GetUsedMaterials(OutMaterials, bGetDebugMaterials);
+	
+	for (int32 MatIndex = 0; MatIndex < Scene->CombinedData.Materials.Num(); MatIndex++)
+	{
+		OutMaterials.Add(Scene->CombinedData.Materials[MatIndex]);
+	}
 }
 
 FPrimitiveSceneProxy* ULiteGPUSceneRenderComponent::CreateSceneProxy()
@@ -209,6 +334,11 @@ void ALiteGPUSceneManager::OnAdd(TObjectPtr<ULiteGPUSceneComponent> Comp, const 
 {
 	if (Scene.IsValid())
 	{
+		static auto CVarX = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.SectorDistanceX"));
+		static auto CVarY = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.SectorDistanceY"));
+		const float SectorDistanceX = CVarX ? CVarX->GetFloat() : 1000.0f;
+		const float SectorDistanceY = CVarY ? CVarY->GetFloat() : 1000.0f;
+
 		auto& SceneData = Scene->SceneData;
 		const auto MeshIndex = SceneData.SourceMeshes.Find(Comp->StaticMesh);
 
@@ -219,9 +349,12 @@ void ALiteGPUSceneManager::OnAdd(TObjectPtr<ULiteGPUSceneComponent> Comp, const 
 		for (int32 IndexOffset = 0; IndexOffset < Instances.Num(); IndexOffset++)
 		{
 			const auto& ToAdd = Instances[IndexOffset];
-			uint32 ThisSectorID = 0;
 			// ADD TO SECTOR
-			if (auto pSectorID = SceneData.SectorIDMap.Find(ToAdd.SectorXY))
+			const auto SectorX = FMath::FloorToInt64(ToAdd.Transform.GetLocation().X / SectorDistanceX);
+			const auto SectorY = FMath::FloorToInt64(ToAdd.Transform.GetLocation().Y / SectorDistanceY);
+			const auto SectorXY = FInt64Vector2(SectorX, SectorY);
+			uint32 ThisSectorID = 0;
+			if (auto pSectorID = SceneData.SectorIDMap.Find(SectorXY))
 			{
 				ThisSectorID = *pSectorID;
 				SceneData.SectorInfos[*pSectorID].InstanceCount += 1;
@@ -229,17 +362,15 @@ void ALiteGPUSceneManager::OnAdd(TObjectPtr<ULiteGPUSceneComponent> Comp, const 
 			else
 			{
 				ThisSectorID = SceneData.NextSectorID;
-				SceneData.SectorIDMap.Add(ToAdd.SectorXY, ThisSectorID);
-				SceneData.SectorInfos.Add({ ToAdd.SectorXY, 1 });
+				SceneData.SectorIDMap.Add(SectorXY, ThisSectorID);
+				SceneData.SectorInfos.Add({ SectorXY, 1 });
 				SceneData.NextSectorID += 1;
 			}
 
 			// ADD INSTANCE TRANSFORMS
 			const int32 NewInstanceIndex = IndexOffset + OldInstanceNum;
-			SceneData.InstanceXYOffsets.Add({ ToAdd.XOffset, ToAdd.YOffset });
-			SceneData.InstanceZOffsets.Add(ToAdd.ZOffset);
+			SceneData.InstanceTransforms.Add(ToAdd.Transform);
 			SceneData.InstanceSectorIDs.Add(ThisSectorID);
-			SceneData.InstanceRotationScales.Add({ ToAdd.XRot, ToAdd.YRot, ToAdd.ZRot, ToAdd.Scale });
 			SceneData.InstanceTypes.Add(MeshIndex);
 			check(CIDToPID.FindOrAdd(Comp).Find(ToAdd.IDWithinComponent) == nullptr);
 			CIDToPID.FindOrAdd(Comp).Add(ToAdd.IDWithinComponent, NewInstanceIndex);
@@ -299,10 +430,8 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 				SectorInfo.InstanceCount -= 1;
 
 				// REMOTE INSTANCE DATA
-				SceneData.InstanceXYOffsets[RemoveIndex] = SceneData.InstanceXYOffsets[LastIndex];
-				SceneData.InstanceZOffsets[RemoveIndex] = SceneData.InstanceZOffsets[LastIndex];
+				SceneData.InstanceTransforms[RemoveIndex] = SceneData.InstanceTransforms[LastIndex];
 				SceneData.InstanceSectorIDs[RemoveIndex] = SceneData.InstanceSectorIDs[LastIndex];
-				SceneData.InstanceRotationScales[RemoveIndex] = SceneData.InstanceRotationScales[LastIndex];
 				SceneData.InstanceTypes[RemoveIndex] = SceneData.InstanceTypes[LastIndex];
 
 				SceneData.InstanceSectionNums[RemoveIndex] = SceneData.InstanceSectionNums[LastIndex];
@@ -321,10 +450,7 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 			CIDToPID.FindOrAdd(Comp).Remove(Instances[IndexOffset].IDWithinComponent);
 		}
 
-		SceneData.InstanceXYOffsets.SetNum(SceneData.InstanceNum);
-		SceneData.InstanceZOffsets.SetNum(SceneData.InstanceNum);;
 		SceneData.InstanceSectorIDs.SetNum(SceneData.InstanceNum);
-		SceneData.InstanceRotationScales.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceTypes.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceSectionNums.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceSectionIDs.SetNum(SceneData.PerSectionMaxNum * SceneData.InstanceNum);

@@ -32,10 +32,6 @@ void ULiteGPUSceneComponent::ManagedTick(float DeltaTime)
 
 TArray<int64> ULiteGPUSceneComponent::AddInstancesWS(const TArray<FTransform>& InstanceTransforms)
 {
-	static auto CVarX = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.SectorDistanceX"));
-	static auto CVarY = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.SectorDistanceY"));
-	const float SectorDistanceX = CVarX ? CVarX->GetFloat() : 1000.0f;
-	const float SectorDistanceY = CVarY ? CVarY->GetFloat() : 1000.0f;
 	TArray<int64> InstanceIDs;
 	TArray64<FLiteGPUSceneInstance> NewInstances;
 	InstanceIDs.Reserve(InstanceIDs.Num() + InstanceTransforms.Num());
@@ -44,17 +40,8 @@ TArray<int64> ULiteGPUSceneComponent::AddInstancesWS(const TArray<FTransform>& I
 	for (const auto& Transform : InstanceTransforms)
 	{
 		auto& NewInstance = PersistantInstances.AddZeroed_GetRef();
-		const auto SectorX = FMath::FloorToInt64(Transform.GetLocation().X / SectorDistanceX);
-		const auto SectorY = FMath::FloorToInt64(Transform.GetLocation().Y / SectorDistanceY);
 		NewInstance.IDWithinComponent = NextInstanceID++;
-		NewInstance.SectorXY = FInt64Vector2(SectorX, SectorY);
-		NewInstance.XOffset = Transform.GetLocation().X - ( SectorX * SectorDistanceX);
-		NewInstance.YOffset = Transform.GetLocation().Y - ( SectorY * SectorDistanceY);
-		NewInstance.ZOffset = Transform.GetLocation().Z;
-		NewInstance.XRot = FFloat16(Transform.GetRotation().Rotator().Roll);
-		NewInstance.YRot = FFloat16(Transform.GetRotation().Rotator().Pitch);
-		NewInstance.ZRot = FFloat16(Transform.GetRotation().Rotator().Yaw);
-		NewInstance.Scale = FFloat16(Transform.GetScale3D().X);
+		NewInstance.Transform = UE::Math::TTransform<float>(Transform);
 		check(IDToSlotMap.Find(NewInstance.IDWithinComponent) == nullptr);
 		IDToSlotMap.Add(NewInstance.IDWithinComponent, PersistantInstances.Num() - 1);
 		InstanceIDs.Add(NewInstance.IDWithinComponent);
@@ -75,17 +62,9 @@ bool ULiteGPUSceneComponent::GetInstanceTransformWS(int64 InstanceIndex, FTransf
 	{
 		return false;
 	}
-	static auto CVarX = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.SectorDistanceX"));
-	static auto CVarY = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.SectorDistanceY"));
-	const float SectorDistanceX = CVarX ? CVarX->GetFloat() : 1000.0f;
-	const float SectorDistanceY = CVarY ? CVarY->GetFloat() : 1000.0f;
 	const auto Slot = IDToSlotMap.FindRef(InstanceIndex);
 	const auto& Instance = PersistantInstances[Slot];
-	const auto SectorX = Instance.SectorXY.X * SectorDistanceX;
-	const auto SectorY = Instance.SectorXY.Y * SectorDistanceY;
-	OutInstanceTransform.SetLocation(FVector(SectorX + Instance.XOffset, SectorY + Instance.YOffset, Instance.ZOffset));
-	OutInstanceTransform.SetRotation(FQuat::MakeFromEuler(FVector(Instance.XRot, Instance.YRot, Instance.ZRot)));
-	OutInstanceTransform.SetScale3D(FVector(Instance.Scale, Instance.Scale, Instance.Scale));
+	const auto SectorX = Instance.Transform;
 	return true;
 }
 

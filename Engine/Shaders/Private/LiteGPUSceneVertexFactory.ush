@@ -13,20 +13,8 @@
 #define USE_INSTANCING 1
 #endif
 
-struct FSectorInfo
-{
-	int64_t CoordinateX;
-	int64_t CoordinateY;
-	uint64_t InstanceCount = 0;
-};
-StructuredBuffer<FSectorInfo> VertexFetch_SectorInfoParameter;
-Buffer<half2> VertexFetch_PerInstanceXYParameter;
-Buffer<float> VertexFetch_PerInstanceZParameter;
-Buffer<uint> VertexFetch_PerInstanceSectorIDParameter;
-Buffer<half4> VertexFetch_PerInstanceRotScaleParameter;
-
 Buffer<float4> VertexFetch_PerInstanceTransformParameter;
-Buffer<float> VertexFetch_PerInstanceScale;
+// Buffer<float> VertexFetch_PerInstanceScale;
 
 /**
  * Per-vertex inputs from bound vertex buffers
@@ -303,7 +291,8 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 	float4 InstanceTransform2 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 2];
 	float4 InstanceTransform3 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 3];
 	
-	Intermediates.InstanceScale = VertexFetch_PerInstanceScale[InstanceIndex];
+	// Intermediates.InstanceScale = VertexFetch_PerInstanceScale[InstanceIndex];
+	Intermediates.InstanceScale = 1.f;
 	Intermediates.InstanceCurrentFrameTransform = float4x4(InstanceTransform0,
 		                                                    InstanceTransform1,
 		                                                    InstanceTransform2,
