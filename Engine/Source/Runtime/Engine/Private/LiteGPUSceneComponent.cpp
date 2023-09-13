@@ -3,60 +3,6 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All);
 
-FLiteGPUSceneProxy::FLiteGPUSceneProxy(ULiteGPUSceneComponent* Component, ERHIFeatureLevel::Type InFeatureLevel)
-	:FPrimitiveSceneProxy(Component, TEXT("LiteGPUScene"))
-{
-
-}
-
-FLiteGPUSceneProxy::~FLiteGPUSceneProxy()
-{
-	if (IsInRenderingThread())
-	{
-
-	}
-}
-
-FPrimitiveViewRelevance FLiteGPUSceneProxy::GetViewRelevance(const FSceneView* View) const
-{
-	FPrimitiveViewRelevance Result;
-	Result.bDrawRelevance = IsShown(View);
-	Result.bShadowRelevance = IsShadowCast(View);
-	Result.bDynamicRelevance = true;
-	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
-	Result.bDistortion = true;
-	Result.bNormalTranslucency = true;
-	Result.bSeparateTranslucency = true;
-	return Result;
-}
-
-void FLiteGPUSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
-{
-	const FSceneView* MainView = Views[0];
-	static auto CVarEnable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.Enable"));
-	return;
-}
-
-void FLiteGPUSceneProxy::PostUpdateBeforePresent(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily)
-{
-
-}
-
-void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector) const
-{
-	return;
-}
-
-bool FLiteGPUSceneProxy::IsInitialized() const
-{
-	return false;
-}
-
-void FLiteGPUSceneProxy::Init_RenderingThread()
-{
-	return;
-}
-
 void ULiteGPUSceneComponent::ManagedTick(float DeltaTime)
 {
 	ENQUEUE_RENDER_COMMAND(UpdateLiteGPUSceneOps)(
@@ -114,19 +60,10 @@ TArray<int64> ULiteGPUSceneComponent::AddInstancesWS(const TArray<FTransform>& I
 		InstanceIDs.Add(NewInstance.IDWithinComponent);
 		NewInstances.Add(NewInstance);
 	}
-	/*
-	if (Handler)
+	auto NewOp = MakeShared<Op>(NewInstances, OP_ADD);
 	{
-		Handler->OnAdd(this, NewInstances);
-	}
-	else
-	*/
-	{
-		auto NewOp = MakeShared<Op>(NewInstances, OP_ADD);
-		{
-			FScopeLock LCK(&OpsMutex);
-			PendingOps.Enqueue(NewOp);
-		}
+		FScopeLock LCK(&OpsMutex);
+		PendingOps.Enqueue(NewOp);
 	}
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Added %d Instances to LiteGPUScene."), InstanceIDs.Num());
 	return InstanceIDs;
@@ -168,19 +105,10 @@ bool ULiteGPUSceneComponent::RemoveInstances(const TArray<int64>& InstancesToRem
 			IDToSlotMap.Remove(ID);
 		}
 	}
-	/*
-	if (Handler)
+	auto NewOp = MakeShared<Op>(RemovedInstances, OP_REMOVE);
 	{
-		Handler->OnRemove(this, RemovedInstances);
-	}
-	else
-	*/
-	{
-		auto NewOp = MakeShared<Op>(RemovedInstances, OP_REMOVE);
-		{
-			FScopeLock LCK(&OpsMutex);
-			PendingOps.Enqueue(NewOp);
-		}
+		FScopeLock LCK(&OpsMutex);
+		PendingOps.Enqueue(NewOp);
 	}
 	PersistantInstances.Shrink();
 	return false;
@@ -188,19 +116,10 @@ bool ULiteGPUSceneComponent::RemoveInstances(const TArray<int64>& InstancesToRem
 
 bool ULiteGPUSceneComponent::ClearInstances()
 {
-	/*
-	if (Handler)
+	auto NewOp = MakeShared<Op>(PersistantInstances, OP_REMOVE);
 	{
-		Handler->OnRemove(this, PersistantInstances);
-	}
-	else
-	*/
-	{
-		auto NewOp = MakeShared<Op>(PersistantInstances, OP_REMOVE);
-		{
-			FScopeLock LCK(&OpsMutex);
-			PendingOps.Enqueue(NewOp);
-		}
+		FScopeLock LCK(&OpsMutex);
+		PendingOps.Enqueue(NewOp);
 	}
 	PersistantInstances.SetNum(0, true);
 	IDToSlotMap.Empty();
@@ -218,7 +137,8 @@ void ULiteGPUSceneComponent::OnUnregister()
 	Super::OnUnregister();
 }
 
+// TODO: REMOVE THIS
 FPrimitiveSceneProxy* ULiteGPUSceneComponent::CreateSceneProxy()
 {
-	return new FLiteGPUSceneProxy(this, GetWorld()->FeatureLevel);
+	return nullptr;
 }

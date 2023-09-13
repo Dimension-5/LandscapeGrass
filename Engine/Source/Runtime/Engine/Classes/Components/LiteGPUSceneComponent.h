@@ -9,6 +9,8 @@
 #include "LiteGPUSceneComponent.generated.h"
 
 class ULiteGPUSceneComponent;
+struct FLiteGPUSceneVertexFactory;
+struct FLiteGPUSceneVertexFactoryUserData;
 
 struct FLiteGPUSceneInstance
 {
@@ -23,30 +25,6 @@ struct ILiteGPUSceneInstanceHandler
 {
 	virtual void OnAdd(TObjectPtr<ULiteGPUSceneComponent>, const TArrayView<FLiteGPUSceneInstance> Instances) = 0;
 	virtual void OnRemove(TObjectPtr<ULiteGPUSceneComponent>, const TArrayView<FLiteGPUSceneInstance> Instances) = 0;
-};
-
-class FLiteGPUSceneProxy : public FPrimitiveSceneProxy
-{
-public:
-	SIZE_T GetTypeHash() const override
-	{
-		static size_t UniquePointer;
-		return reinterpret_cast<size_t>(&UniquePointer);
-	}
-
-	FLiteGPUSceneProxy(ULiteGPUSceneComponent* Component, ERHIFeatureLevel::Type InFeatureLevel);
-	virtual ~FLiteGPUSceneProxy();
-
-	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
-
-	virtual bool CanBeOccluded() const override { return false; }
-	virtual uint32 GetMemoryFootprint(void) const override { return(sizeof(*this) + GetAllocatedSize()); }
-	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
-	virtual void PostUpdateBeforePresent(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily);
-	uint32 GetAllocatedSize(void) const { return FPrimitiveSceneProxy::GetAllocatedSize(); }
-	void DrawMeshBatches(int32 ViewIndex, const FSceneView* View, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector) const;
-	void Init_RenderingThread();
-	ENGINE_API bool IsInitialized() const;
 };
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
@@ -99,4 +77,116 @@ private:
 
 	friend class ALiteGPUSceneManager;
 	ILiteGPUSceneInstanceHandler* Handler;
+};
+
+struct FLiteGPUSceneVertexFactoryDataType : public FLocalVertexFactory::FDataType
+{
+	/** Most Important, per instance offset in indirect draw only make effect in input assamble binding */
+	FVertexStreamComponent InstanceIndicesComponent;
+};
+
+struct FLiteGPUSceneVertexFactoryShaderParameters : public FLocalVertexFactoryShaderParameters
+{
+	DECLARE_TYPE_LAYOUT(FLiteGPUSceneVertexFactoryShaderParameters, NonVirtual);
+	void Bind(const FShaderParameterMap& ParameterMap);
+
+	void GetElementShaderBindings(
+		const class FSceneInterface* Scene,
+		const FSceneView* View,
+		const class FMeshMaterialShader* Shader,
+		const EVertexInputStreamType InputStreamType,
+		ERHIFeatureLevel::Type FeatureLevel,
+		const FVertexFactory* VertexFactory,
+		const FMeshBatchElement& BatchElement,
+		class FMeshDrawSingleShaderBindings& ShaderBindings,
+		FVertexInputStreamArray& VertexStreams
+	) const;
+
+private:
+	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_SectorInfoParameter);
+	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceXYParameter);
+	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceZParameter);
+	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceSectorIDParameter);
+	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceRotScaleParameter);
+};
+
+struct FLiteGPUSceneMeshVertexBuffer;
+
+struct ENGINE_API FLiteGPUSceneVertexFactory : public FLocalVertexFactory
+{
+	DECLARE_VERTEX_FACTORY_TYPE(FLiteGPUSceneVertexFactory);
+	FLiteGPUSceneVertexFactory(ERHIFeatureLevel::Type InFeatureLevel);
+
+	/** Init function that should only be called on render thread. */
+	/** Initialization */
+	void InitVertexFactory(const FLiteGPUSceneMeshVertexBuffer* VertexBuffer, const FVertexBuffer* InstanceIndiceBuffer);
+	/** Initialization */
+	void Init_RenderThread(const FLiteGPUSceneMeshVertexBuffer* VertexBuffer, const FVertexBuffer* InstanceIndiceBuffer);
+
+	virtual void InitRHI(FRHICommandListBase& RHICmdList) override;
+
+	/**
+	* Should we cache the material's shadertype on this platform with this vertex factory?
+	*/
+	static bool ShouldCompilePermutation(const FVertexFactoryShaderPermutationParameters& Parameters)
+	{
+		return (Parameters.MaterialParameters.bIsUsedWithInstancedStaticMeshes || Parameters.MaterialParameters.bIsSpecialEngineMaterial)
+			// && Parameters.MaterialParameters.TessellationMode == MTM_NoTessellation
+			&& FLocalVertexFactory::ShouldCompilePermutation(Parameters);
+	}
+
+	/**
+	* Modify compile environment to enable instancing
+	* @param OutEnvironment - shader compile environment to modify
+	*/
+	static void ModifyCompilationEnvironment(const FVertexFactoryShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		OutEnvironment.SetDefine(TEXT("MANUAL_VERTEX_FETCH"), TEXT("0"));
+		OutEnvironment.SetDefine(TEXT("USE_INSTANCING"), TEXT("1"));
+		OutEnvironment.SetDefine(TEXT("USE_INSTANCING_EMULATED"), TEXT("0"));
+		FLocalVertexFactory::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+	}
+
+	/**
+	* An implementation of the interface used by TSynchronizedResource to update the resource with new data from the game thread.
+	*/
+	void SetData(const FLiteGPUSceneVertexFactoryDataType& InData)
+	{
+		FLocalVertexFactory::Data = InData;
+		Data = InData;
+		UpdateRHI(FRHICommandListImmediate::Get());
+	}
+
+	/**
+	* Copy the data from another vertex factory
+	* @param Other - factory to copy from
+	*/
+	void Copy(const FLiteGPUSceneVertexFactory& Other)
+	{
+		FLiteGPUSceneVertexFactory* VertexFactory = this;
+		const FLiteGPUSceneVertexFactoryDataType* DataCopy = &Other.Data;
+		ENQUEUE_RENDER_COMMAND(FLiteGPUSceneVertexFactoryCopyData)(
+			[VertexFactory, DataCopy](FRHICommandList& RHICmdList)
+			{
+				VertexFactory->Data = *DataCopy;
+			}
+		);
+		BeginUpdateResourceRHI(this);
+	}
+
+	static FVertexFactoryShaderParameters* ConstructShaderParameters(EShaderFrequency ShaderFrequency)
+	{
+		return ShaderFrequency == SF_Vertex ? new FLiteGPUSceneVertexFactoryShaderParameters() : NULL;
+	}
+
+	bool IsInitialized() { return bInitialized; }
+
+private:
+	bool bInitialized;
+	FLiteGPUSceneVertexFactoryDataType Data;
+};
+
+struct FLiteGPUSceneVertexFactoryUserData
+{
+	class FLiteGPUSceneProxy* SceneProxy;
 };

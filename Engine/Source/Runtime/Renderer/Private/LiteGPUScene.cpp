@@ -306,12 +306,17 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 		// SECTORS
 		const auto SectorCount = SceneData.SectorInfos.Num();
 		BufferState.SectorInfoBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, SectorInfoBuffer, SectorCount * sizeof(FSectorInfo), TEXT("LiteGPUScene.SectorInfos"));
+		BufferState.SectorInfoBufferSRV = GraphBuilder.CreateSRV(BufferState.SectorInfoBuffer);
 
 		// TRANSFORMS
 		BufferState.InstanceXYBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceXYBuffer, Capacity * sizeof(FLiteGPUHalf2), TEXT("LiteGPUScene.InstanceXYs"));
+		BufferState.InstanceXYBufferSRV = GraphBuilder.CreateSRV(BufferState.InstanceXYBuffer);
 		BufferState.InstanceZBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceZBuffer, Capacity * sizeof(float), TEXT("LiteGPUScene.InstanceZs"));
+		BufferState.InstanceZBufferSRV = GraphBuilder.CreateSRV(BufferState.InstanceZBuffer);
 		BufferState.InstanceSectorIDBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceSectorIDBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.SectorIDs"));
+		BufferState.InstanceSectorIDBufferSRV = GraphBuilder.CreateSRV(BufferState.InstanceSectorIDBuffer);
 		BufferState.InstanceRotScaleBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceRotScaleBuffer, Capacity * sizeof(FLiteGPUHalf4), TEXT("LiteGPUScene.InstanceRotScales"));
+		BufferState.InstanceRotScaleBufferSRV = GraphBuilder.CreateSRV(BufferState.InstanceRotScaleBuffer);
 		
 		FLiteGPUSceneUpdate Update;
 		{
@@ -445,7 +450,7 @@ void FLiteGPUSceneMeshIndexBuffer::InitRHI(FRHICommandListBase& RHICmdList)
 FLiteGPUCombinedBuffer::FLiteGPUCombinedBuffer()
 	: VertexBuffer(nullptr), IndexBuffer(nullptr)
 	, UsedBytes(0), VertexNum(0)
-	, IndiceNum(0), bIntialized(false)
+	, IndiceNum(0), bInitialized(false)
 {
 
 }
@@ -457,7 +462,7 @@ FLiteGPUCombinedBuffer::~FLiteGPUCombinedBuffer()
 
 void FLiteGPUCombinedBuffer::Initialize(const TArray<FLiteGPUSceneMeshVertex>& Vertices, const TArray<uint32>& Indices)
 {
-	if (bIntialized)
+	if (bInitialized)
 	{
 		return;
 	}
@@ -483,16 +488,16 @@ void FLiteGPUCombinedBuffer::Initialize(const TArray<FLiteGPUSceneMeshVertex>& V
 
 	UsedBytes += sizeof(FLiteGPUSceneMeshVertex) * Vertices.Num();
 	UsedBytes += sizeof(uint32) * Indices.Num();
-	bIntialized = true;
+	bInitialized = true;
 }
 
 void FLiteGPUCombinedBuffer::Release_RenderingThread()
 {
 	check(IsInRenderingThread());
 
-	if (bIntialized)
+	if (bInitialized)
 	{
-		bIntialized = false;
+		bInitialized = false;
 		VertexBuffer->ReleaseResource();
 		IndexBuffer->ReleaseResource();
 

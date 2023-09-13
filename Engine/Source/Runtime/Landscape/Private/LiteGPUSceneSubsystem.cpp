@@ -74,6 +74,102 @@ void ULiteGPUSceneSubsystem::BuildLiteGPUScenes()
 	}
 }
 
+FLiteGPUSceneProxy::FLiteGPUSceneProxy(ULiteGPUSceneRenderComponent* Component, ERHIFeatureLevel::Type InFeatureLevel)
+	: FPrimitiveSceneProxy(Component, TEXT("LiteGPUScene")),
+	  Scene(Component->Scene)
+{
+	pGPUDrivenVertexFactory = new FLiteGPUSceneVertexFactory(InFeatureLevel);
+
+	pVFUserData = new FLiteGPUSceneVertexFactoryUserData();
+	pVFUserData->SceneProxy = this;
+
+	FLiteGPUSceneProxy* pLiteGPUSceneProxy = this;
+	FSceneInterface* SceneInterface = Component->GetWorld()->Scene;
+	ENQUEUE_RENDER_COMMAND(InitLiteGPUProxy)(
+		[pLiteGPUSceneProxy, SceneInterface](FRHICommandList& RHICmdList)
+		{
+			pLiteGPUSceneProxy->Init_RenderingThread();
+		}
+	);
+	BeginInitResource(pGPUDrivenVertexFactory);
+}
+
+FLiteGPUSceneProxy::~FLiteGPUSceneProxy()
+{
+	if (IsInRenderingThread())
+	{
+		if (nullptr != pGPUDrivenVertexFactory)
+		{
+			pGPUDrivenVertexFactory->ReleaseResource();
+			delete pGPUDrivenVertexFactory;
+			pGPUDrivenVertexFactory = nullptr;
+		}
+
+		if (pVFUserData)
+		{
+			delete pVFUserData;
+			pVFUserData = nullptr;
+		}
+	}
+}
+
+FPrimitiveViewRelevance FLiteGPUSceneProxy::GetViewRelevance(const FSceneView* View) const
+{
+	FPrimitiveViewRelevance Result;
+	Result.bDrawRelevance = IsShown(View);
+	Result.bShadowRelevance = IsShadowCast(View);
+	Result.bDynamicRelevance = true;
+	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
+	Result.bDistortion = true;
+	Result.bNormalTranslucency = true;
+	Result.bSeparateTranslucency = true;
+	return Result;
+}
+
+void FLiteGPUSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const
+{
+	const FSceneView* MainView = Views[0];
+	static auto CVarEnable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.Enable"));
+	return;
+}
+
+void FLiteGPUSceneProxy::PostUpdateBeforePresent(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily)
+{
+
+}
+
+void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View, const FSceneViewFamily& ViewFamily, FMeshElementCollector& Collector) const
+{
+	return;
+}
+
+bool FLiteGPUSceneProxy::IsInitialized() const
+{
+	return false;
+}
+
+void FLiteGPUSceneProxy::Init_RenderingThread()
+{
+	check(Scene->CombinedBuffer.bInitialized);
+	UE_LOG(LogLiteGPUScene, Log, TEXT("Call FLiteGPUSceneProxy::Init_RenderingThread"));
+	pGPUDrivenVertexFactory->Init_RenderThread(Scene->CombinedBuffer.VertexBuffer, nullptr);// TODO: Scene->InstanceIndicesBuffer);
+}
+
+void ULiteGPUSceneRenderComponent::OnRegister()
+{
+	Super::OnRegister();
+}
+
+void ULiteGPUSceneRenderComponent::OnUnregister()
+{
+	Super::OnUnregister();
+}
+
+FPrimitiveSceneProxy* ULiteGPUSceneRenderComponent::CreateSceneProxy()
+{
+	return new FLiteGPUSceneProxy(this, GetWorld()->FeatureLevel);
+}
+
 ALiteGPUSceneManager* ALiteGPUSceneManager::Get(const UObject* WorldContext)
 {
 	if (WorldContext)
@@ -249,6 +345,7 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 void ALiteGPUSceneManager::BuildLiteGPUScene()
 {
 	const auto StartTime = FDateTime::UtcNow();
+	Scene = MakeShared<FLiteGPUScene>();
 
 	// Glob all components
 	Components.Empty();
@@ -268,7 +365,6 @@ void ALiteGPUSceneManager::BuildLiteGPUScene()
 		Meshes.AddUnique(Component->GetUnderlyingMesh());
 	}
 
-	Scene = MakeShared<FLiteGPUScene>();
 	Scene->BuildScene(Meshes);
 
 	ENQUEUE_RENDER_COMMAND(UpdateLiteGPUScene)(
@@ -282,6 +378,11 @@ void ALiteGPUSceneManager::BuildLiteGPUScene()
 
 	const auto Elapsed = FDateTime::UtcNow() - StartTime;
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Lite GPU scene build finished in %d milliseconds"), Elapsed.GetTotalMilliseconds());
+
+	RenderComp = NewObject<ULiteGPUSceneRenderComponent>(this, TEXT("LiteGPUSceneRenderComponent"));
+	RenderComp->Owner = this;
+	RenderComp->Scene = Scene;
+	RenderComp->RegisterComponent();
 }
 
 void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)

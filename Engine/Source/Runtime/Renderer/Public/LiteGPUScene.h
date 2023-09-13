@@ -89,12 +89,12 @@ struct FLiteGPUCombinedBuffer
 	void Release_AnyThread();
 	void Release_RenderingThread();
 
-	FLiteGPUSceneMeshVertexBuffer* VertexBuffer;
-	FLiteGPUSceneMeshIndexBuffer* IndexBuffer;
-	uint64 UsedBytes;
-	uint32 VertexNum;
-	uint32 IndiceNum;
-	bool bIntialized;
+	FLiteGPUSceneMeshVertexBuffer* VertexBuffer = nullptr;
+	FLiteGPUSceneMeshIndexBuffer* IndexBuffer = nullptr;
+	uint64 UsedBytes = 0;
+	uint32 VertexNum = 0;
+	uint32 IndiceNum = 0;
+	bool bInitialized = false;
 };
 
 struct FLiteGPUCounterBuffers
@@ -211,13 +211,18 @@ struct FLiteGPUBufferState
 	FRDGBuffer* MeshAABBBuffer = nullptr;
 
 	FRDGBuffer* SectorInfoBuffer = nullptr;
+	FRDGBufferSRV* SectorInfoBufferSRV = nullptr;
 	
 	FRDGBuffer* InstanceIndicesBuffer = nullptr;
 	FRDGBuffer* InstanceAttributeBuffer = nullptr;
 	FRDGBuffer* InstanceXYBuffer = nullptr;
+	FRDGBufferSRV* InstanceXYBufferSRV = nullptr;
 	FRDGBuffer* InstanceZBuffer = nullptr;
+	FRDGBufferSRV* InstanceZBufferSRV = nullptr;
 	FRDGBuffer* InstanceSectorIDBuffer = nullptr;
+	FRDGBufferSRV* InstanceSectorIDBufferSRV = nullptr;
 	FRDGBuffer* InstanceRotScaleBuffer = nullptr;
+	FRDGBufferSRV* InstanceRotScaleBufferSRV = nullptr;
 };
 
 struct RENDERER_API FLiteGPUScene
@@ -234,7 +239,10 @@ public:
 	void EnqueueUpdates_TS(const FLiteGPUSceneUpdate&& UpdateToEnqueue);
 
 protected:
+	friend class FLiteGPUSceneProxy;
 	friend class ALiteGPUSceneManager;
+	friend struct FLiteGPUSceneVertexFactoryShaderParameters;
+
 	void buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 	void buildSceneData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 
