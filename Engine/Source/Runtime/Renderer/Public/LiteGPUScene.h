@@ -168,9 +168,16 @@ struct FLiteGPUInstanceAttribute
 	uint8 Padding;
 };
 
+struct FSectorInfo
+{
+	FInt64Vector2 Coordinate;
+	uint64 InstanceCount = 0;
+};
+
 struct FLiteGPUSceneData
 {
 	// const per build
+	int32 PerSectionMaxNum = 0;
 	int32 InstanceTypeNum = 0;
 	int32 TotalSectionNum = 0;
 	TArray64<uint8> SectionAABBData;
@@ -178,10 +185,12 @@ struct FLiteGPUSceneData
 	TArray64<FLiteGPUSceneMeshSectionInfo> SectionInfos;
 	// const per build
 
+	TArray<FSectorInfo> SectorInfos;
+	TMap<FInt64Vector2, uint32> SectorIDMap;
+	uint32 NextSectorID = 0;
+
 	int32 InstanceNum = 0;
 	int32 InstanceCapacity = 0;
-	TArray64<uint32> SectionInstanceNums; // Number of instances that references the section
-
 	TArray64<FLiteGPUHalf2> InstanceXYOffsets; // [X-Offset, Y-Offset]
 	TArray64<float> InstanceZOffsets;
 	TArray64<uint32> InstanceSectorIDs;
@@ -191,6 +200,9 @@ struct FLiteGPUSceneData
 	TArray64<uint8> InstanceSectionNums;
 
 	TQueue<FLiteGPUSceneUpdate, EQueueMode::Spsc> Updates;
+
+	// TODO: REMOVE THIS
+	TArray64<uint32> SectionInstanceNums; // Number of instances that references the section
 };
 
 struct FLiteGPUBufferState
@@ -198,9 +210,10 @@ struct FLiteGPUBufferState
 	FRDGBuffer* SectionInfoBuffer = nullptr;
 	FRDGBuffer* MeshAABBBuffer = nullptr;
 
+	FRDGBuffer* SectorInfoBuffer = nullptr;
+	
 	FRDGBuffer* InstanceIndicesBuffer = nullptr;
 	FRDGBuffer* InstanceAttributeBuffer = nullptr;
-
 	FRDGBuffer* InstanceXYBuffer = nullptr;
 	FRDGBuffer* InstanceZBuffer = nullptr;
 	FRDGBuffer* InstanceSectorIDBuffer = nullptr;
@@ -232,30 +245,31 @@ protected:
 		uint32& OutFirstIndexOffset, uint32& OutIndicesCount, 
 		float& OutScreenSizeMin, float& OutScreenSizeMax);
 
-	int32 PerSectionMaxNum = 0;
-
 	FLiteGPUCombinedData CombinedData;
+	FLiteGPUViewData ViewData;
 	FLiteGPUSceneData SceneData;
 	FCriticalSection SceneUpdatesMutex;
-	FLiteGPUViewData ViewData;
 
 	FLiteGPUCombinedBuffer CombinedBuffer;
 	TRefCountPtr<FRDGPooledBuffer> SectionInfoBuffer;
-	FRDGAsyncScatterUploadBuffer SectionInfoUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
+
+	FRDGAsyncScatterUploadBuffer SectionInfoUploadBuffer;
 	FRDGAsyncScatterUploadBuffer MeshAABBUploadBuffer;
 
+	TRefCountPtr<FRDGPooledBuffer> SectorInfoBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceIndicesBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceAttributeBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceAttributeUploadBuffer;
-
 	TRefCountPtr<FRDGPooledBuffer> InstanceXYBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceXYUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceZBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceZUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceSectorIDUploadBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceRotScaleBuffer;
+
+	FRDGAsyncScatterUploadBuffer SectorInfoUploadBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceAttributeUploadBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceXYUploadBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceZUploadBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceSectorIDUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceRotScaleUploadBuffer;
 
 	FLiteGPUViewBuffers ViewBuffers;

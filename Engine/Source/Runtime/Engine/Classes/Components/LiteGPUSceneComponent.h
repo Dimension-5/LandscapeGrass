@@ -12,8 +12,8 @@ class ULiteGPUSceneComponent;
 
 struct FLiteGPUSceneInstance
 {
+	FInt64Vector2 SectorXY;
 	int64 IDWithinComponent;
-	FInt32Vector2 TilePosition;
 	FFloat16 XOffset, YOffset;
 	float ZOffset;
 	FFloat16 XRot, YRot, ZRot, Scale;
@@ -89,7 +89,13 @@ private:
 		OP_ADD,
 		OP_REMOVE
 	};
-	TArray64<TTuple<TArray64<FLiteGPUSceneInstance>, OPS>> PendingOps;
+	struct Op
+	{
+		TArray64<FLiteGPUSceneInstance> Instances;
+		OPS OP;
+	};
+	TQueue<TSharedPtr<Op>, EQueueMode::Spsc> PendingOps;
+	FCriticalSection OpsMutex;
 
 	friend class ALiteGPUSceneManager;
 	ILiteGPUSceneInstanceHandler* Handler;

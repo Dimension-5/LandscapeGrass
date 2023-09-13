@@ -122,11 +122,27 @@ void ALiteGPUSceneManager::OnAdd(TObjectPtr<ULiteGPUSceneComponent> Comp, const 
 
 		for (int32 IndexOffset = 0; IndexOffset < Instances.Num(); IndexOffset++)
 		{
-			const int32 NewInstanceIndex = IndexOffset + OldInstanceNum;
 			const auto& ToAdd = Instances[IndexOffset];
+			uint32 ThisSectorID = 0;
+			// ADD TO SECTOR
+			if (auto pSectorID = SceneData.SectorIDMap.Find(ToAdd.SectorXY))
+			{
+				ThisSectorID = *pSectorID;
+				SceneData.SectorInfos[*pSectorID].InstanceCount += 1;
+			}
+			else
+			{
+				ThisSectorID = SceneData.NextSectorID;
+				SceneData.SectorIDMap.Add(ToAdd.SectorXY, ThisSectorID);
+				SceneData.SectorInfos.Add({ ToAdd.SectorXY, 1 });
+				SceneData.NextSectorID += 1;
+			}
+
+			// ADD INSTANCE TRANSFORMS
+			const int32 NewInstanceIndex = IndexOffset + OldInstanceNum;
 			SceneData.InstanceXYOffsets.Add({ ToAdd.XOffset, ToAdd.YOffset });
 			SceneData.InstanceZOffsets.Add(ToAdd.ZOffset);
-			SceneData.InstanceSectorIDs.Add(-1/*TODO: Sector CullingID*/);
+			SceneData.InstanceSectorIDs.Add(ThisSectorID);
 			SceneData.InstanceRotationScales.Add({ ToAdd.XRot, ToAdd.YRot, ToAdd.ZRot, ToAdd.Scale });
 			SceneData.InstanceTypes.Add(MeshIndex);
 			check(CIDToPID.FindOrAdd(Comp).Find(ToAdd.IDWithinComponent) == nullptr);
@@ -135,13 +151,13 @@ void ALiteGPUSceneManager::OnAdd(TObjectPtr<ULiteGPUSceneComponent> Comp, const 
 
 		int32 SectionIndex = 0;
 		SceneData.InstanceSectionNums.SetNum(OldInstanceNum + Instances.Num());
-		SceneData.InstanceSectionIDs.SetNum(SceneData.InstanceSectionNums.Num() * Scene->PerSectionMaxNum);
+		SceneData.InstanceSectionIDs.SetNum(SceneData.InstanceSectionNums.Num() * SceneData.PerSectionMaxNum);
 		for (auto& SectionInfo : SceneData.SectionInfos)
 		{
 			for (int32 IndexOffset = 0; IndexOffset < Instances.Num(); IndexOffset++)
 			{
 				const int32 NewInstanceIndex = IndexOffset + OldInstanceNum;
-				const int32 InstanceSectionStart = NewInstanceIndex * Scene->PerSectionMaxNum;
+				const int32 InstanceSectionStart = NewInstanceIndex * SceneData.PerSectionMaxNum;
 				if (SectionInfo.MeshIndex == MeshIndex)
 				{
 					int32 InsertIndex = SceneData.InstanceSectionNums[NewInstanceIndex];
@@ -182,6 +198,11 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 			const auto RemoveIndex = CIDToPID.FindOrAdd(Comp)[Instances[IndexOffset].IDWithinComponent];
 			if (LastIndex != RemoveIndex)
 			{
+				// REMOVE FROM SECTOR
+				auto& SectorInfo = SceneData.SectorInfos[SceneData.InstanceSectorIDs[RemoveIndex]];
+				SectorInfo.InstanceCount -= 1;
+
+				// REMOTE INSTANCE DATA
 				SceneData.InstanceXYOffsets[RemoveIndex] = SceneData.InstanceXYOffsets[LastIndex];
 				SceneData.InstanceZOffsets[RemoveIndex] = SceneData.InstanceZOffsets[LastIndex];
 				SceneData.InstanceSectorIDs[RemoveIndex] = SceneData.InstanceSectorIDs[LastIndex];
@@ -191,10 +212,10 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 				SceneData.InstanceSectionNums[RemoveIndex] = SceneData.InstanceSectionNums[LastIndex];
 				SceneData.InstanceSectionNums[LastIndex] = 0;
 
-				for (int32 i = 0; i < Scene->PerSectionMaxNum; i++)
+				for (int32 i = 0; i < SceneData.PerSectionMaxNum; i++)
 				{
-					SceneData.InstanceSectionIDs[RemoveIndex * Scene->PerSectionMaxNum + i] = SceneData.InstanceSectionIDs[LastIndex * Scene->PerSectionMaxNum + i];
-					SceneData.InstanceSectionIDs[LastIndex * Scene->PerSectionMaxNum + i] = 0;
+					SceneData.InstanceSectionIDs[RemoveIndex * SceneData.PerSectionMaxNum + i] = SceneData.InstanceSectionIDs[LastIndex * SceneData.PerSectionMaxNum + i];
+					SceneData.InstanceSectionIDs[LastIndex * SceneData.PerSectionMaxNum + i] = 0;
 				}
 
 				Update.InstanceNum++;
@@ -207,9 +228,10 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 		SceneData.InstanceXYOffsets.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceZOffsets.SetNum(SceneData.InstanceNum);;
 		SceneData.InstanceSectorIDs.SetNum(SceneData.InstanceNum);
+		SceneData.InstanceRotationScales.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceTypes.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceSectionNums.SetNum(SceneData.InstanceNum);
-		SceneData.InstanceSectionIDs.SetNum(Scene->PerSectionMaxNum * SceneData.InstanceNum);
+		SceneData.InstanceSectionIDs.SetNum(SceneData.PerSectionMaxNum * SceneData.InstanceNum);
 
 		for (int32 pIndex = 0; pIndex < SceneData.SectionInstanceNums.Num(); pIndex++)
 		{

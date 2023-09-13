@@ -59,26 +59,37 @@ void FLiteGPUSceneProxy::Init_RenderingThread()
 
 void ULiteGPUSceneComponent::ManagedTick(float DeltaTime)
 {
-	if (!PendingOps.IsEmpty())
-	{
-		auto Ops = PendingOps.Pop(true);
-		if (Ops.Value == OP_ADD)
+	ENQUEUE_RENDER_COMMAND(UpdateLiteGPUSceneOps)(
+		[this](FRHICommandListImmediate& RHICmdList)
 		{
-			Handler->OnAdd(this, Ops.Key);
-		}
-		else if (Ops.Value == OP_REMOVE)
-		{
-			Handler->OnRemove(this, Ops.Key);
-		}
-	}
+			/*if*/ while (!PendingOps.IsEmpty())
+			{
+				TSharedPtr<Op> Ops = nullptr;
+				{
+					FScopeLock LCK(&OpsMutex);
+					PendingOps.Dequeue(Ops);
+				}
+				if (Ops != nullptr)
+				{
+					if (Ops->OP == OP_ADD)
+					{
+						Handler->OnAdd(this, Ops->Instances);
+					}
+					else if (Ops->OP == OP_REMOVE)
+					{
+						Handler->OnRemove(this, Ops->Instances);
+					}
+				}
+			}
+		});
 }
 
 TArray<int64> ULiteGPUSceneComponent::AddInstancesWS(const TArray<FTransform>& InstanceTransforms)
 {
-	static auto CVarX = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.TileDistanceX"));
-	static auto CVarY = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.TileDistanceY"));
-	const float TileDistanceX = CVarX ? CVarX->GetFloat() : 1000.0f;
-	const float TileDistanceY = CVarY ? CVarY->GetFloat() : 1000.0f;
+	static auto CVarX = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.SectorDistanceX"));
+	static auto CVarY = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.SectorDistanceY"));
+	const float SectorDistanceX = CVarX ? CVarX->GetFloat() : 1000.0f;
+	const float SectorDistanceY = CVarY ? CVarY->GetFloat() : 1000.0f;
 	TArray<int64> InstanceIDs;
 	TArray64<FLiteGPUSceneInstance> NewInstances;
 	InstanceIDs.Reserve(InstanceIDs.Num() + InstanceTransforms.Num());
@@ -87,12 +98,12 @@ TArray<int64> ULiteGPUSceneComponent::AddInstancesWS(const TArray<FTransform>& I
 	for (const auto& Transform : InstanceTransforms)
 	{
 		auto& NewInstance = PersistantInstances.AddZeroed_GetRef();
-		const auto TileX = Transform.GetLocation().X / TileDistanceX;
-		const auto TileY = Transform.GetLocation().Y / TileDistanceY;
+		const auto SectorX = FMath::FloorToInt64(Transform.GetLocation().X / SectorDistanceX);
+		const auto SectorY = FMath::FloorToInt64(Transform.GetLocation().Y / SectorDistanceY);
 		NewInstance.IDWithinComponent = NextInstanceID++;
-		NewInstance.TilePosition = FInt32Vector2(TileX, TileY);
-		NewInstance.XOffset = Transform.GetLocation().X - TileX;
-		NewInstance.YOffset = Transform.GetLocation().Y - TileY;
+		NewInstance.SectorXY = FInt64Vector2(SectorX, SectorY);
+		NewInstance.XOffset = Transform.GetLocation().X - ( SectorX * SectorDistanceX);
+		NewInstance.YOffset = Transform.GetLocation().Y - ( SectorY * SectorDistanceY);
 		NewInstance.ZOffset = Transform.GetLocation().Z;
 		NewInstance.XRot = FFloat16(Transform.GetRotation().Rotator().Roll);
 		NewInstance.YRot = FFloat16(Transform.GetRotation().Rotator().Pitch);
@@ -103,13 +114,19 @@ TArray<int64> ULiteGPUSceneComponent::AddInstancesWS(const TArray<FTransform>& I
 		InstanceIDs.Add(NewInstance.IDWithinComponent);
 		NewInstances.Add(NewInstance);
 	}
+	/*
 	if (Handler)
 	{
 		Handler->OnAdd(this, NewInstances);
 	}
 	else
+	*/
 	{
-		PendingOps.Add({ NewInstances, OP_ADD });
+		auto NewOp = MakeShared<Op>(NewInstances, OP_ADD);
+		{
+			FScopeLock LCK(&OpsMutex);
+			PendingOps.Enqueue(NewOp);
+		}
 	}
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Added %d Instances to LiteGPUScene."), InstanceIDs.Num());
 	return InstanceIDs;
@@ -121,15 +138,15 @@ bool ULiteGPUSceneComponent::GetInstanceTransformWS(int64 InstanceIndex, FTransf
 	{
 		return false;
 	}
-	static auto CVarX = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.TileDistanceX"));
-	static auto CVarY = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.TileDistanceY"));
-	const float TileDistanceX = CVarX ? CVarX->GetFloat() : 1000.0f;
-	const float TileDistanceY = CVarY ? CVarY->GetFloat() : 1000.0f;
+	static auto CVarX = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.SectorDistanceX"));
+	static auto CVarY = IConsoleManager::Get().FindConsoleVariable(TEXT("r.LiteGPUScene.SectorDistanceY"));
+	const float SectorDistanceX = CVarX ? CVarX->GetFloat() : 1000.0f;
+	const float SectorDistanceY = CVarY ? CVarY->GetFloat() : 1000.0f;
 	const auto Slot = IDToSlotMap.FindRef(InstanceIndex);
 	const auto& Instance = PersistantInstances[Slot];
-	const auto TileX = Instance.TilePosition.X * TileDistanceX;
-	const auto TileY = Instance.TilePosition.Y * TileDistanceY;
-	OutInstanceTransform.SetLocation(FVector(TileX + Instance.XOffset, TileY + Instance.YOffset, Instance.ZOffset));
+	const auto SectorX = Instance.SectorXY.X * SectorDistanceX;
+	const auto SectorY = Instance.SectorXY.Y * SectorDistanceY;
+	OutInstanceTransform.SetLocation(FVector(SectorX + Instance.XOffset, SectorY + Instance.YOffset, Instance.ZOffset));
 	OutInstanceTransform.SetRotation(FQuat::MakeFromEuler(FVector(Instance.XRot, Instance.YRot, Instance.ZRot)));
 	OutInstanceTransform.SetScale3D(FVector(Instance.Scale, Instance.Scale, Instance.Scale));
 	return true;
@@ -146,17 +163,24 @@ bool ULiteGPUSceneComponent::RemoveInstances(const TArray<int64>& InstancesToRem
 		{
 			RemovedInstances.Add(PersistantInstances[Slot]);
 			PersistantInstances[Slot] = PersistantInstances.Last();
+			PersistantInstances.SetNum(PersistantInstances.Num() - 1, true);
 			IDToSlotMap[PersistantInstances[Slot].IDWithinComponent] = Slot;
 			IDToSlotMap.Remove(ID);
 		}
 	}
+	/*
 	if (Handler)
 	{
 		Handler->OnRemove(this, RemovedInstances);
 	}
 	else
+	*/
 	{
-		PendingOps.Add({ RemovedInstances, OP_REMOVE });
+		auto NewOp = MakeShared<Op>(RemovedInstances, OP_REMOVE);
+		{
+			FScopeLock LCK(&OpsMutex);
+			PendingOps.Enqueue(NewOp);
+		}
 	}
 	PersistantInstances.Shrink();
 	return false;
@@ -164,13 +188,19 @@ bool ULiteGPUSceneComponent::RemoveInstances(const TArray<int64>& InstancesToRem
 
 bool ULiteGPUSceneComponent::ClearInstances()
 {
+	/*
 	if (Handler)
 	{
 		Handler->OnRemove(this, PersistantInstances);
 	}
 	else
+	*/
 	{
-		PendingOps.Add({ PersistantInstances, OP_REMOVE });
+		auto NewOp = MakeShared<Op>(PersistantInstances, OP_REMOVE);
+		{
+			FScopeLock LCK(&OpsMutex);
+			PendingOps.Enqueue(NewOp);
+		}
 	}
 	PersistantInstances.SetNum(0, true);
 	IDToSlotMap.Empty();

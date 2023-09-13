@@ -4,7 +4,6 @@
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All);
 
 FLiteGPUScene::FLiteGPUScene()
-	: PerSectionMaxNum(0)
 {
 
 }
@@ -172,7 +171,7 @@ void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSour
 		{
 			if (FStaticMeshRenderData* MeshRenderData = StaticMesh->GetRenderData())
 			{
-				PerSectionMaxNum = FMath::Max(PerSectionMaxNum, MeshRenderData->LODResources.Num());
+				SceneData.PerSectionMaxNum = FMath::Max(SceneData.PerSectionMaxNum, MeshRenderData->LODResources.Num());
 			}
 		}
 	}
@@ -231,14 +230,14 @@ void FLiteGPUScene::UpdateSectionInfos(FRDGBuilder& GraphBuilder)
 		FResizeResourceSOAParams ResizeParams;
 		ResizeParams.NumBytes = SceneData.TotalSectionNum * 2 * sizeof(FVector4f);
 		ResizeParams.NumArrays = SceneData.TotalSectionNum * 2;
-		BufferState.SectionInfoBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, SectionInfoBuffer, ResizeParams, TEXT("LiteGPUScene.SectionInfo"));
+		BufferState.SectionInfoBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, SectionInfoBuffer, ResizeParams, TEXT("LiteGPUScene.SectionInfos"));
 	
 		struct FTaskContext
 		{
 			FRDGScatterUploader* SectionInfoUploader = nullptr;
 		};
 		FTaskContext& TaskContext = *GraphBuilder.AllocObject<FTaskContext>();
-		TaskContext.SectionInfoUploader = SectionInfoUploadBuffer.Begin(GraphBuilder, BufferState.SectionInfoBuffer, SceneData.TotalSectionNum * 2, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.SectionInfo"));
+		TaskContext.SectionInfoUploader = SectionInfoUploadBuffer.Begin(GraphBuilder, BufferState.SectionInfoBuffer, SceneData.TotalSectionNum * 2, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.SectionInfos"));
 		GraphBuilder.AddCommandListSetupTask([&TaskContext, SectionInfoBufferArray](FRHICommandListBase& RHICmdList) {
 			SCOPED_NAMED_EVENT(UpdateLiteGPUScene_SectionInfos, FColor::Green);
 			LockIfValid(RHICmdList, TaskContext.SectionInfoUploader);
@@ -304,6 +303,10 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 		BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceIndicesBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.Indices"));
 		BufferState.InstanceAttributeBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceAttributeBuffer, Capacity * sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Attributes"));
 
+		// SECTORS
+		const auto SectorCount = SceneData.SectorInfos.Num();
+		BufferState.SectorInfoBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, SectorInfoBuffer, SectorCount * sizeof(FSectorInfo), TEXT("LiteGPUScene.SectorInfos"));
+
 		// TRANSFORMS
 		BufferState.InstanceXYBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceXYBuffer, Capacity * sizeof(FLiteGPUHalf2), TEXT("LiteGPUScene.InstanceXYs"));
 		BufferState.InstanceZBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceZBuffer, Capacity * sizeof(float), TEXT("LiteGPUScene.InstanceZs"));
@@ -318,9 +321,10 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 			if (Update.InstanceNum == 0)
 				return;
 		}
-		const auto UploadCount = Update.InstanceNum;
+		const auto InstanceCount = Update.InstanceNum;
 		struct FTaskContext
 		{
+			FRDGScatterUploader* SectorInfoUploader = nullptr;
 			FRDGScatterUploader* InstanceXYUploader = nullptr;
 			FRDGScatterUploader* InstanceZUploader = nullptr;
 			FRDGScatterUploader* InstanceSectorIDUploader = nullptr;
@@ -328,20 +332,30 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 			FRDGScatterUploader* InstanceAttributeUploader = nullptr;
 		};
 		FTaskContext& TaskContext = *GraphBuilder.AllocObject<FTaskContext>();
-		TaskContext.InstanceXYUploader = InstanceXYUploadBuffer.Begin(GraphBuilder, BufferState.InstanceXYBuffer, UploadCount, sizeof(FLiteGPUHalf2), TEXT("LiteGPUScene.Upload.XYs"));
-		TaskContext.InstanceZUploader = InstanceZUploadBuffer.Begin(GraphBuilder, BufferState.InstanceZBuffer, UploadCount, sizeof(float), TEXT("LiteGPUScene.Upload.Zs"));
-		TaskContext.InstanceSectorIDUploader = InstanceSectorIDUploadBuffer.Begin(GraphBuilder, BufferState.InstanceSectorIDBuffer, UploadCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.SectorIDs"));
-		TaskContext.InstanceRotScaleUploader = InstanceRotScaleUploadBuffer.Begin(GraphBuilder, BufferState.InstanceRotScaleBuffer, UploadCount, sizeof(FLiteGPUHalf4), TEXT("LiteGPUScene.Upload.RotScales"));
-		TaskContext.InstanceAttributeUploader = InstanceAttributeUploadBuffer.Begin(GraphBuilder, BufferState.InstanceAttributeBuffer, UploadCount, sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Upload.Attributes"));
-		GraphBuilder.AddCommandListSetupTask([this, &TaskContext, Update](FRHICommandListBase& RHICmdList)
+		TaskContext.SectorInfoUploader = SectorInfoUploadBuffer.Begin(GraphBuilder, BufferState.SectorInfoBuffer, SectorCount, sizeof(FSectorInfo), TEXT("LiteGPUScene.Upload.SectorInfos"));
+		TaskContext.InstanceXYUploader = InstanceXYUploadBuffer.Begin(GraphBuilder, BufferState.InstanceXYBuffer, InstanceCount, sizeof(FLiteGPUHalf2), TEXT("LiteGPUScene.Upload.XYs"));
+		TaskContext.InstanceZUploader = InstanceZUploadBuffer.Begin(GraphBuilder, BufferState.InstanceZBuffer, InstanceCount, sizeof(float), TEXT("LiteGPUScene.Upload.Zs"));
+		TaskContext.InstanceSectorIDUploader = InstanceSectorIDUploadBuffer.Begin(GraphBuilder, BufferState.InstanceSectorIDBuffer, InstanceCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.SectorIDs"));
+		TaskContext.InstanceRotScaleUploader = InstanceRotScaleUploadBuffer.Begin(GraphBuilder, BufferState.InstanceRotScaleBuffer, InstanceCount, sizeof(FLiteGPUHalf4), TEXT("LiteGPUScene.Upload.RotScales"));
+		TaskContext.InstanceAttributeUploader = InstanceAttributeUploadBuffer.Begin(GraphBuilder, BufferState.InstanceAttributeBuffer, InstanceCount, sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Upload.Attributes"));
+		GraphBuilder.AddCommandListSetupTask(
+			[this, &TaskContext, Update](FRHICommandListBase& RHICmdList)
 			{
 				SCOPED_NAMED_EVENT(UpdateLiteGPUScene_Instances, FColor::Green);
 
+				LockIfValid(RHICmdList, TaskContext.SectorInfoUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceXYUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceZUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceSectorIDUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceRotScaleUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceAttributeUploader);
+
+				uint32 SectorIndex = 0;
+				for (auto SectorInfo : SceneData.SectorInfos)
+				{
+					TaskContext.SectorInfoUploader->Add(SectorIndex, &SectorInfo);
+					SectorIndex += 1;
+				}
 
 				for (auto Index : Update.InstanceIndices)
 				{
@@ -357,13 +371,15 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 					TaskContext.InstanceAttributeUploader->Add(Index, &Attribute);
 				}
 
-			UnlockIfValid(RHICmdList, TaskContext.InstanceXYUploader);
-			UnlockIfValid(RHICmdList, TaskContext.InstanceZUploader);
-			UnlockIfValid(RHICmdList, TaskContext.InstanceSectorIDUploader);
-			UnlockIfValid(RHICmdList, TaskContext.InstanceRotScaleUploader);
-			UnlockIfValid(RHICmdList, TaskContext.InstanceAttributeUploader);
-		});
+				UnlockIfValid(RHICmdList, TaskContext.SectorInfoUploader);
+				UnlockIfValid(RHICmdList, TaskContext.InstanceXYUploader);
+				UnlockIfValid(RHICmdList, TaskContext.InstanceZUploader);
+				UnlockIfValid(RHICmdList, TaskContext.InstanceSectorIDUploader);
+				UnlockIfValid(RHICmdList, TaskContext.InstanceRotScaleUploader);
+				UnlockIfValid(RHICmdList, TaskContext.InstanceAttributeUploader);
+			});
 		{
+			SectorInfoUploadBuffer.End(GraphBuilder, TaskContext.SectorInfoUploader);
 			InstanceXYUploadBuffer.End(GraphBuilder, TaskContext.InstanceXYUploader);
 			InstanceZUploadBuffer.End(GraphBuilder, TaskContext.InstanceZUploader);
 			InstanceSectorIDUploadBuffer.End(GraphBuilder, TaskContext.InstanceSectorIDUploader);
@@ -371,6 +387,7 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 			InstanceAttributeUploadBuffer.End(GraphBuilder, TaskContext.InstanceAttributeUploader);
 		}
 		{
+			SectorInfoUploadBuffer.Release();
 			InstanceXYUploadBuffer.Release();
 			InstanceZUploadBuffer.Release();
 			InstanceSectorIDUploadBuffer.Release();
