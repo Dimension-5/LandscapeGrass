@@ -236,11 +236,6 @@ void FLiteGPUSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>&
 	return;
 }
 
-void FLiteGPUSceneProxy::PostUpdateBeforePresent(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily)
-{
-
-}
-
 struct LiteGPUSceneIndirectArguments
 {
 	static void Init(LiteGPUSceneIndirectArguments& ia)

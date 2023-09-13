@@ -47,6 +47,74 @@ static FAutoConsoleVariableRef CVarLiteGPUSceneMaxMipLevel(
 	sLiteGPUSceneHZBMaxMipLevel,
 	TEXT(""));
 
+class FClearLiteGPUSceneResCS : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FClearLiteGPUSceneResCS);
+	SHADER_USE_PARAMETER_STRUCT(FClearLiteGPUSceneResCS, FGlobalShader);
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER(uint32, NumInstances)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWGPUUnCulledInstanceNum)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWGPUUnCulledInstanceScreenSize)
+	END_SHADER_PARAMETER_STRUCT()
+
+public:
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) { return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5); }
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("THREAD_COUNT"), LITE_GPU_SCENE_COMPUTE_THREAD_NUM);
+		// OutEnvironment.SetDefine(TEXT("ENABLE_LITE_GPU_SCENE_DEBUG"), ENABLE_LITE_GPU_SCENE_DEBUG);
+	}
+};
+IMPLEMENT_GLOBAL_SHADER(FClearLiteGPUSceneResCS, "/Engine/Private/LiteGPUSceneCulling.usf", "ClearGPUCullingResCS", SF_Compute);
+
+class FLiteGPUSceneCullingCS : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FLiteGPUSceneCullingCS);
+	SHADER_USE_PARAMETER_STRUCT(FLiteGPUSceneCullingCS, FGlobalShader);
+	class FWaveOps : SHADER_PERMUTATION_BOOL("DIM_WAVE_OPS");
+	using FPermutationDomain = TShaderPermutationDomain<FWaveOps>;
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER(uint32, NumInstances)
+		SHADER_PARAMETER(FVector3f, ViewLocation)
+		SHADER_PARAMETER(FMatrix44f, FrustumPermutedPlanes0)
+		SHADER_PARAMETER(FMatrix44f, FrustumPermutedPlanes1)
+		SHADER_PARAMETER(FMatrix44f, ProjMatrix)
+		SHADER_PARAMETER(FVector4f, PreviewTranslation)
+		SHADER_PARAMETER(FMatrix44f, TranslatedViewProjectionMatrix)
+		SHADER_PARAMETER(FVector4f, HZBSize)
+		SHADER_PARAMETER(FVector4f, HZBUvFactor)
+		SHADER_PARAMETER(float, LiteGPUSceneMinScreenSize)
+		SHADER_PARAMETER_SAMPLER(SamplerState, HZBSampler)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, HZBTexture)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, AABBBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTypeBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWGPUUnCulledInstanceNum)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWGPUUnCulledInstanceScreenSize)
+	END_SHADER_PARAMETER_STRUCT()
+
+public:
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) { return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5); }
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("THREAD_COUNT"), LITE_GPU_SCENE_COMPUTE_THREAD_NUM);
+		// OutEnvironment.SetDefine(TEXT("ENABLE_LITE_GPU_SCENE_DEBUG"), ENABLE_LITE_GPU_SCENE_DEBUG);
+
+		FPermutationDomain PermutationVector(Parameters.PermutationId);
+		if (PermutationVector.Get<FWaveOps>())
+		{
+			OutEnvironment.CompilerFlags.Add(CFLAG_WaveOperations);
+		}
+	}
+};
+IMPLEMENT_GLOBAL_SHADER(FLiteGPUSceneCullingCS, "/Engine/Private/LiteGPUSceneCulling.usf", "LiteGPUSceneCullingCS", SF_Compute);
+
 namespace Detail
 {
 	void Cull(FRHICommandList& RHICmdList
@@ -96,7 +164,7 @@ void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View
 			{
 				if (Proxy && Proxy->IsInitialized())
 				{
-
+					Detail::Cull(RHICmdList, View, Proxy);
 				}
 			}
 		});
