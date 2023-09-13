@@ -160,6 +160,14 @@ struct FLiteGPUSceneUpdate
 	TArray64<uint32> InstanceIndices; // The Indices of the instance that are dirty
 };
 
+struct FLiteGPUInstanceAttribute
+{
+	uint8 Type;
+	uint8 SectionID;
+	uint8 SectionNum;
+	uint8 Padding;
+};
+
 struct FLiteGPUSceneData
 {
 	// const per build
@@ -194,9 +202,7 @@ struct FLiteGPUBufferState
 	FRDGBuffer* MeshAABBBuffer = nullptr;
 
 	FRDGBuffer* InstanceIndicesBuffer = nullptr;
-	FRDGBuffer* InstanceTypeBuffer = nullptr;
-	FRDGBuffer* InstanceSectionNumBuffer = nullptr;
-	FRDGBuffer* InstanceSectionIDsBuffer = nullptr;
+	FRDGBuffer* InstanceAttributeBuffer = nullptr;
 
 	FRDGBuffer* InstanceTilePosBuffer = nullptr;
 	FRDGBuffer* InstanceXYBuffer = nullptr;
@@ -243,12 +249,8 @@ protected:
 	FRDGAsyncScatterUploadBuffer MeshAABBUploadBuffer;
 
 	TRefCountPtr<FRDGPooledBuffer> InstanceIndicesBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceTypeBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceTypeUploadBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceSectionNumBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceSectionNumUploadBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceSectionIDsBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceSectionIDsUploadBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceAttributeBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceAttributeUploadBuffer;
 
 	TRefCountPtr<FRDGPooledBuffer> InstanceTilePosBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceTilePosUploadBuffer;
