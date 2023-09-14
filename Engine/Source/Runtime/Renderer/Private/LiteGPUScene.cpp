@@ -1,5 +1,5 @@
-#include "Components/LiteGPUSceneComponent.h"
 #include "LiteGPUScene.h"
+#include "Components/LiteGPUSceneComponent.h"
 #include "RenderGraphBuilder.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All);
