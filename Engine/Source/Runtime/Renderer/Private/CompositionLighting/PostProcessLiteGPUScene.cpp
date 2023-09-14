@@ -284,6 +284,9 @@ void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View
 	
 	for (auto Proxy : Scene.CachedLiteGPUScene)
 	{
+		if (Proxy->Scene->GetInstanceNum() == 0)
+			continue;
+
 		auto ViewBufferState = Proxy->Scene->GetViewBufferState();
 		auto SceneBufferState = Proxy->Scene->GetSceneBufferState();
 		Detail::BufferBlackboard Buffers;

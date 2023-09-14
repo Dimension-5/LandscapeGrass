@@ -336,6 +336,13 @@ void FLiteGPUScene::UpdateViewBuffers(FRDGBuilder& GraphBuilder)
 	}
 }
 
+
+FRDGBuffer* ResizeStructuredBufferIfNeededAligned(FRDGBuilder& GraphBuilder, TRefCountPtr<FRDGPooledBuffer>& ExternalBuffer, uint32 NumBytes, const TCHAR* Name)
+{
+	NumBytes = Align(NumBytes, 16);
+	return ResizeStructuredBufferIfNeeded(GraphBuilder, ExternalBuffer, NumBytes, Name);
+}
+
 void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 {
 	const auto Capacity = SceneData.InstanceCapacity;
@@ -346,18 +353,18 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 		UpdateViewBuffers(GraphBuilder);
 
 		// TYPE & SECTION INFOS
-		// BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceIndicesBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.Indices"));
-		auto InstanceAttributeBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, BufferState.InstanceAttributeBuffer, Capacity * sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Attributes"));
+		// BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, InstanceIndicesBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.Indices"));
+		auto InstanceAttributeBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceAttributeBuffer, Capacity * sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Attributes"));
 
 		// SECTORS
 		const auto SectorCount = SceneData.SectorInfos.Num();
-		auto SectorInfoBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, BufferState.SectorInfoBuffer, SectorCount * sizeof(FSectorInfo), TEXT("LiteGPUScene.SectorInfos"));
+		auto SectorInfoBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.SectorInfoBuffer, SectorCount * sizeof(FSectorInfo), TEXT("LiteGPUScene.SectorInfos"));
 		auto SectorInfoBufferSRV = GraphBuilder.CreateSRV(SectorInfoBuffer);
 
 		// TRANSFORMS
-		auto InstanceTransformBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, BufferState.InstanceTransformBuffer, Capacity * sizeof(FMatrix44f), TEXT("LiteGPUScene.Transforms"));
+		auto InstanceTransformBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBuffer, Capacity * sizeof(FMatrix44f), TEXT("LiteGPUScene.Transforms"));
 		auto InstanceTransformBufferSRV = GraphBuilder.CreateSRV(InstanceTransformBuffer);
-		auto InstanceSectorIDBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, BufferState.InstanceSectorIDBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.SectorIDs"));
+		auto InstanceSectorIDBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceSectorIDBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.SectorIDs"));
 		auto InstanceSectorIDBufferSRV = GraphBuilder.CreateSRV(InstanceSectorIDBuffer);
 		
 		FLiteGPUSceneUpdate Update;
