@@ -51,9 +51,9 @@ struct FLiteGPUSceneMeshVertex
 	FLiteGPUSceneMeshVertex& operator =(const FLiteGPUSceneMeshVertex& Another);
 
 	FVector3f Position;
-	FColor Color;
 	FPackedNormal TangentX;
 	FPackedNormal TangentZ;
+	FColor Color;
 	FVector2f TextureFirstCoordinate;
 	FVector2f TextureSecondCoordinate;
 };
@@ -279,9 +279,9 @@ protected:
 
 FORCEINLINE FLiteGPUSceneMeshVertex::FLiteGPUSceneMeshVertex() :
 	Position(FVector3f(0, 0, 0)),
-	Color(FColor(255, 255, 255)),
 	TangentX(FVector3f(1, 0, 0)),
 	TangentZ(FVector3f(0, 0, 1)),
+	Color(FColor(255, 255, 255)),
 	TextureFirstCoordinate(FVector2f::ZeroVector),
 	TextureSecondCoordinate(FVector2f::ZeroVector)
 {
@@ -293,18 +293,18 @@ FORCEINLINE FLiteGPUSceneMeshVertex::FLiteGPUSceneMeshVertex() :
 FORCEINLINE FLiteGPUSceneMeshVertex::FLiteGPUSceneMeshVertex(const FLiteGPUSceneMeshVertex& Another)
 {
 	Position = Another.Position;
-	Color = Another.Color;
 	TextureFirstCoordinate = Another.TextureFirstCoordinate;
 	TextureSecondCoordinate = Another.TextureSecondCoordinate;
 	TangentX = Another.TangentX;
 	TangentZ = Another.TangentZ;
+	Color = Another.Color;
 }
 
 FORCEINLINE FLiteGPUSceneMeshVertex::FLiteGPUSceneMeshVertex(const FVector3f& InPosition) :
 	Position(InPosition),
-	Color(FColor(255, 255, 255)),
 	TangentX(FVector3f(1, 0, 0)),
 	TangentZ(FVector3f(0, 0, 1)),
+	Color(FColor(255, 255, 255)),
 	TextureFirstCoordinate(FVector2f::ZeroVector),
 	TextureSecondCoordinate(FVector2f::ZeroVector)
 {
@@ -315,9 +315,9 @@ FORCEINLINE FLiteGPUSceneMeshVertex::FLiteGPUSceneMeshVertex(const FVector3f& In
 
 FORCEINLINE FLiteGPUSceneMeshVertex::FLiteGPUSceneMeshVertex(const FVector3f& InPosition, const FVector2f& InUV) :
 	Position(InPosition),
-	Color(FColor(255, 255, 255)),
 	TangentX(FVector3f(1, 0, 0)),
 	TangentZ(FVector3f(0, 0, 1)),
+	Color(FColor(255, 255, 255)),
 	TextureFirstCoordinate(InUV),
 	TextureSecondCoordinate(InUV)
 {
@@ -328,9 +328,9 @@ FORCEINLINE FLiteGPUSceneMeshVertex::FLiteGPUSceneMeshVertex(const FVector3f& In
 
 FORCEINLINE FLiteGPUSceneMeshVertex::FLiteGPUSceneMeshVertex(const FVector3f& InPosition, const FVector3f& InTangentX, const FVector3f& InTangentZ, const FVector2f& InTexCoord, const FVector2f& InTexCoord2, const FVector2f& InTexCoord3, const FColor& InColor) :
 	Position(InPosition),
-	Color(InColor),
 	TangentX(InTangentX),
 	TangentZ(InTangentZ),
+	Color(InColor),
 	TextureFirstCoordinate(InTexCoord),
 	TextureSecondCoordinate(InTexCoord2)
 {

@@ -201,11 +201,12 @@ FPrimitiveViewRelevance FLiteGPUSceneProxy::GetViewRelevance(const FSceneView* V
 	Result.bDrawRelevance = IsShown(View);
 	Result.bShadowRelevance = IsShadowCast(View);
 	Result.bDynamicRelevance = true;
-	Result.bRenderInDepthPass = true;
+	Result.bStaticRelevance = false;
+	Result.bRenderInMainPass = ShouldRenderInMainPass();
+	Result.bUsesLightingChannels = GetLightingChannelMask() != GetDefaultLightingChannelMask();
 	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
-	Result.bDistortion = true;
-	Result.bNormalTranslucency = true;
-	Result.bSeparateTranslucency = true;
+	Result.bTranslucentSelfShadow = bCastVolumetricTranslucentShadow;
+	Result.bVelocityRelevance = DrawsVelocity() & Result.bOpaque & Result.bRenderInMainPass;
 	return Result;
 }
 
@@ -328,6 +329,7 @@ void FLiteGPUSceneProxy::Init_RenderingThread()
 ULiteGPUSceneRenderComponent::ULiteGPUSceneRenderComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	bRenderInDepthPass = true;
 	BodyInstance.bSimulatePhysics = false;
 }
 
@@ -345,9 +347,12 @@ void ULiteGPUSceneRenderComponent::GetUsedMaterials(TArray<UMaterialInterface*>&
 {
 	Super::GetUsedMaterials(OutMaterials, bGetDebugMaterials);
 
-	for (int32 MatIndex = 0; MatIndex < Scene->CombinedData.Materials.Num(); MatIndex++)
+	if (Scene.IsValid())
 	{
-		OutMaterials.Add(Scene->CombinedData.Materials[MatIndex]);
+		for (int32 MatIndex = 0; MatIndex < Scene->CombinedData.Materials.Num(); MatIndex++)
+		{
+			OutMaterials.Add(Scene->CombinedData.Materials[MatIndex]);
+		}
 	}
 }
 

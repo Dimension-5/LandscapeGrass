@@ -3829,18 +3829,6 @@ void FDeferredShadingSceneRenderer::Render(FRDGBuilder& GraphBuilder)
 			GraphBuilder.SetCommandListStat(GET_STATID(STAT_CLM_AfterVelocity));
 		}
 
-		// ++[D5]
-		{
-			RDG_EVENT_SCOPE(GraphBuilder, "UpdateLiteGPUScene");
-			RDG_GPU_STAT_SCOPE(GraphBuilder, UpdateLiteGPUScene);
-			for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ++ViewIndex)
-			{
-				const FViewInfo& View = Views[ViewIndex];
-				AddLiteGPUSceneCullingPass(GraphBuilder, View);
-			}
-		}
-		// --[D5]
-
 		// Pre-lighting composition lighting stage
 		// e.g. deferred decals, SSAO
 		{
@@ -3857,6 +3845,18 @@ void FDeferredShadingSceneRenderer::Render(FRDGBuilder& GraphBuilder)
 
 			CompositionLighting.ProcessAfterBasePass(GraphBuilder, Mode);
 		}
+
+		// ++[D5]
+		{
+			RDG_CSV_STAT_EXCLUSIVE_SCOPE(GraphBuilder, UpdateLiteGPUScene);
+			RDG_GPU_STAT_SCOPE(GraphBuilder, UpdateLiteGPUScene);
+			for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ++ViewIndex)
+			{
+				const FViewInfo& View = Views[ViewIndex];
+				AddLiteGPUSceneCullingPass(GraphBuilder, View);
+			}
+		}
+		// --[D5]
 
 		// Rebuild scene textures to include velocity, custom depth, and SSAO.
 		SceneTextures.SetupMode |= ESceneTextureSetupMode::All;

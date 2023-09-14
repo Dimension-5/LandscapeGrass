@@ -28,8 +28,8 @@ void FLiteGPUScene::fillMeshLODSectionData(int32 LodIndex, const FStaticMeshRend
 	OutFirstVertexOffset = OutCombinedVertexBufferData.Num();
 	OutFirstIndexOffset = OutCombinedIndiceBufferData.Num();
 
-	TArray<FLiteGPUSceneMeshVertex> RawVertices;
-	TArray<uint32> RawIndices;
+	uint32 VerticesCount = 0;
+	uint32 IndicesCount = 0;
 	TMap<uint32, uint32> IndicesMap;
 
 	uint32 RawVertexIdx = 0;
@@ -57,7 +57,7 @@ void FLiteGPUScene::fillMeshLODSectionData(int32 LodIndex, const FStaticMeshRend
 		}
 		FLiteGPUSceneMeshVertex MeshVertex(Pos, TangentX, TangentZ, UV, UV2, UV3, VertexColor);
 		OutCombinedVertexBufferData.Add(MeshVertex);
-		RawVertices.Add(MeshVertex);
+		VerticesCount += 1;
 		IndicesMap.Add(RealVertexIdx, RawVertexIdx);
 
 		RawVertexIdx++;
@@ -67,7 +67,7 @@ void FLiteGPUScene::fillMeshLODSectionData(int32 LodIndex, const FStaticMeshRend
 	{
 		uint32 RealVertexIndex = TotalIndices[RenderSection.FirstIndex + IndiceIdx];
 		uint32* pMappedIndex = IndicesMap.Find(RealVertexIndex);
-		RawIndices.Add(*pMappedIndex);
+		IndicesCount += 1;
 		OutCombinedIndiceBufferData.Add(*pMappedIndex);
 	}
 
@@ -89,8 +89,8 @@ void FLiteGPUScene::fillMeshLODSectionData(int32 LodIndex, const FStaticMeshRend
 		OutScreenSizeMin = 0;
 	}
 
-	OutIndicesCount = RawIndices.Num();
-	OutVertexCount = RawVertices.Num();
+	OutIndicesCount = IndicesCount;
+	OutVertexCount = VerticesCount;
 }
 
 void FLiteGPUScene::buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
