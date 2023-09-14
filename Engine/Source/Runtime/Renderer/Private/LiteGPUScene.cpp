@@ -292,6 +292,50 @@ void FLiteGPUScene::UpdateAABBData(FRDGBuilder& GraphBuilder)
 
 DECLARE_GPU_STAT(LiteGPUSceneUpdate)
 
+void FLiteGPUScene::UpdateViewBuffers(FRDGBuilder& GraphBuilder)
+{
+	const auto Capacity = SceneData.InstanceCapacity;
+	if (Capacity != 0)
+	{
+		// VIEW BUFFERS
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(float), Capacity);
+			// Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			ViewBufferState.UnCulledInstanceScreenSize = ResizeBufferIfNeeded(GraphBuilder, RWUnCulledInstanceScreenSize, Desc, TEXT("LiteGPUScene.View.ScreenSizes"));
+		}
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity);
+			// Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			ViewBufferState.UnCulledInstanceBuffer = ResizeBufferIfNeeded(GraphBuilder, RWUnCulledInstanceBuffer, Desc, TEXT("LiteGPUScene.View.UnCulledInstances"));
+		}
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 1);
+			// Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			ViewBufferState.UnCulledInstanceNum = ResizeBufferIfNeeded(GraphBuilder, RWUnCulledInstanceNum, Desc, TEXT("LiteGPUScene.View.UnCulledInstanceNum"));
+		}
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 3);
+			Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			ViewBufferState.IndirectDrawDispatchIndiretBuffer = ResizeBufferIfNeeded(GraphBuilder, RWIndirectDrawDispatchIndiretBuffer, Desc, TEXT("LiteGPUScene.View.DrawDispatchIndirectBuffer"));
+		}
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(float), Capacity * SceneData.PerSectionMaxNum);
+			// Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			ViewBufferState.InstanceIndiceBuffer = ResizeBufferIfNeeded(GraphBuilder, RWInstanceIndiceBuffer, Desc, TEXT("LiteGPUScene.View.DrawIndices"));
+		}
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 5 * SceneData.TotalSectionNum);
+			Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			ViewBufferState.IndirectDrawBuffer = ResizeBufferIfNeeded(GraphBuilder, RWIndirectDrawBuffer, Desc, TEXT("LiteGPUScene.View.IndirectDrawBuffer"));
+		}
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 5);
+			Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			ViewBufferState.UnCulledInstanceIndirectParameters = ResizeBufferIfNeeded(GraphBuilder, RWUnCulledInstanceIndirectParameters, Desc, TEXT("LiteGPUScene.View.UnCulledInstanceIndirectParameters"));
+		}
+	}
+}
+
 void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 {
 	const auto Capacity = SceneData.InstanceCapacity;
@@ -299,8 +343,10 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 	{
 		RDG_GPU_STAT_SCOPE(GraphBuilder, LiteGPUSceneUpdate);
 
+		UpdateViewBuffers(GraphBuilder);
+
 		// TYPE & SECTION INFOS
-		BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceIndicesBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.Indices"));
+		// BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceIndicesBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.Indices"));
 		BufferState.InstanceAttributeBuffer = ResizeStructuredBufferIfNeeded(GraphBuilder, InstanceAttributeBuffer, Capacity * sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Attributes"));
 
 		// SECTORS
@@ -384,7 +430,7 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 	}
 	else
 	{
-		InstanceIndicesBuffer.SafeRelease();
+		// InstanceIndicesBuffer.SafeRelease();
 		InstanceTransformBuffer.SafeRelease();
 		InstanceSectorIDBuffer.SafeRelease();
 		InstanceAttributeBuffer.SafeRelease();

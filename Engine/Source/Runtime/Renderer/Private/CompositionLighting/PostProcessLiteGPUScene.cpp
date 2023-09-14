@@ -117,21 +117,27 @@ IMPLEMENT_GLOBAL_SHADER(FLiteGPUSceneCullingCS, "/Engine/Private/LiteGPUSceneCul
 
 namespace Detail
 {
-	void Cull(FRHICommandList& RHICmdList
+	void Cull(FRDGBuilder& GraphBuilder
+		, const FViewInfo& View
+		, class FLiteGPUSceneProxy* CullingProxy)
+	{
+		GraphBuilder.AddPass(
+			{},
+			ERDGPassFlags::NeverParallel,
+			[&View](FRHICommandList& RHICmdList)
+			{
+
+			});
+	}
+
+	void DepthDrawTest(FRDGBuilder& GraphBuilder
 		, const FViewInfo& View
 		, class FLiteGPUSceneProxy* CullingProxy)
 	{
 
 	}
 
-	void DepthDrawTest(FRHICommandList& RHICmdList
-		, const FViewInfo& View
-		, class FLiteGPUSceneProxy* CullingProxy)
-	{
-
-	}
-
-	void Debug(FRHICommandList& RHICmdList
+	void Debug(FRDGBuilder& GraphBuilder
 		, const FViewInfo& View
 		, class FLiteGPUSceneProxy* CullingProxy)
 	{
@@ -153,19 +159,13 @@ void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View
 		return;
 	}
 
-	GraphBuilder.AddPass(
-		{},
-		ERDGPassFlags::NeverParallel,
-		[&View](FRHICommandList& RHICmdList)
+	const FSceneViewFamily& ViewFamily = *(View.Family);
+	FScene& Scene = *(FScene*)ViewFamily.Scene;
+	for (auto Proxy : Scene.CachedLiteGPUScene)
+	{
+		if (Proxy && Proxy->IsInitialized())
 		{
-			const FSceneViewFamily& ViewFamily = *(View.Family);
-			FScene& Scene = *(FScene*)ViewFamily.Scene;
-			for (auto Proxy : Scene.CachedLiteGPUScene)
-			{
-				if (Proxy && Proxy->IsInitialized())
-				{
-					Detail::Cull(RHICmdList, View, Proxy);
-				}
-			}
-		});
+			Detail::Cull(GraphBuilder, View, Proxy);
+		}
+	}
 }

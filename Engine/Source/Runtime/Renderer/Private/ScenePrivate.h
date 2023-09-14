@@ -3008,7 +3008,6 @@ public:
 	TArray<class FLiteGPUSceneProxy*> CachedLiteGPUScene;
 	// --[D5]
 
-
 	/** Potential capsule shadow casters registered to the scene. */
 	TArray<FPrimitiveSceneInfo*> DynamicIndirectCasterPrimitives; 
 
