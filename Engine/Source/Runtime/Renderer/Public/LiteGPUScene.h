@@ -206,7 +206,6 @@ struct FLiteGPUSceneBufferState
 	FRDGBuffer* SectorInfoBuffer = nullptr;
 	FRDGBufferSRV* SectorInfoBufferSRV = nullptr;
 	
-	// FRDGBuffer* InstanceIndicesBuffer = nullptr;
 	FRDGBuffer* InstanceAttributeBuffer = nullptr;
 	FRDGBuffer* InstanceTransformBuffer = nullptr;
 	FRDGBufferSRV* InstanceTransformBufferSRV = nullptr;
@@ -226,6 +225,10 @@ public:
 	void UpdateInstanceData(FRDGBuilder& GraphBuilder);
 
 	void EnqueueUpdates_TS(const FLiteGPUSceneUpdate&& UpdateToEnqueue);
+
+	uint64 GetInstanceNum() const { return SceneData.InstanceNum; }
+	FLiteGPUViewBufferState GetViewBufferState() const { return ViewBufferState; }
+	FLiteGPUSceneBufferState GetSceneBufferState() const { return BufferState; }
 
 protected:
 	friend class FLiteGPUSceneProxy;
