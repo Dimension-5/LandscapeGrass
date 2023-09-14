@@ -1,9 +1,11 @@
+#include "Components/LiteGPUSceneComponent.h"
 #include "LiteGPUScene.h"
 #include "RenderGraphBuilder.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All);
 
-FLiteGPUScene::FLiteGPUScene()
+FLiteGPUScene::FLiteGPUScene(ERHIFeatureLevel::Type InFeatureLevel)
+	: FeatureLevel(InFeatureLevel)
 {
 
 }
@@ -320,8 +322,24 @@ void FLiteGPUScene::UpdateViewBuffers(FRDGBuilder& GraphBuilder)
 		}
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(float), Capacity * SceneData.PerSectionMaxNum);
-			// Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			Desc.Usage |= EBufferUsageFlags::VertexBuffer;
 			auto InstanceIndiceBuffer = ResizeBufferIfNeeded(GraphBuilder, ViewBufferState.RWInstanceIndiceBuffer, Desc, TEXT("LiteGPUScene.View.DrawIndices"));
+		
+			CurrentIndicesVertexBuffer = ViewBufferState.RWInstanceIndiceBuffer->GetRHI();
+			auto pVF = DynamicVFMap.Find(CurrentIndicesVertexBuffer);
+			if (pVF == nullptr)
+			{
+				DynamicVF NewVF = {};
+				NewVF.GPUIndicesVertexBuffer = new FVertexBuffer();
+				NewVF.GPUIndicesVertexBuffer->InitResource(FRHICommandListExecutor::GetImmediateCommandList());
+				NewVF.GPUIndicesVertexBuffer->VertexBufferRHI = CurrentIndicesVertexBuffer;
+				
+				NewVF.pGPUDrivenVertexFactory = new FLiteGPUSceneVertexFactory(FeatureLevel);
+				NewVF.pGPUDrivenVertexFactory->Init_RenderThread(CombinedBuffer.VertexBuffer, NewVF.GPUIndicesVertexBuffer);
+				BeginInitResource(NewVF.pGPUDrivenVertexFactory);
+
+				DynamicVFMap.Add(CurrentIndicesVertexBuffer, NewVF);
+			}
 		}
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 5 * SceneData.TotalSectionNum);

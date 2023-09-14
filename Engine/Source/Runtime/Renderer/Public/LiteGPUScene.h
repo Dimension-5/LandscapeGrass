@@ -4,6 +4,8 @@
 #include "UnifiedBuffer.h"
 
 class UStaticMesh;
+struct FLiteGPUSceneVertexFactory;
+
 struct FLiteGPUHalf2
 {
 	FFloat16 X;
@@ -192,6 +194,7 @@ struct FLiteGPUViewBufferState
 	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceScreenSize;
 	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceBuffer;
 	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceNum;
+
 	TRefCountPtr<FRDGPooledBuffer> RWIndirectDrawDispatchIndiretBuffer;
 	TRefCountPtr<FRDGPooledBuffer> RWInstanceIndiceBuffer;
 	TRefCountPtr<FRDGPooledBuffer> RWIndirectDrawBuffer;
@@ -208,22 +211,26 @@ struct FLiteGPUSceneBufferState
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
 };
 
-struct RENDERER_API FLiteGPUScene
+struct FLiteGPUScene
 {
 public:
-	FLiteGPUScene();
-	~FLiteGPUScene();
-	void BuildScene(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
+	RENDERER_API FLiteGPUScene(ERHIFeatureLevel::Type InFeatureLevel);
+	RENDERER_API ~FLiteGPUScene();
+	RENDERER_API void BuildScene(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 	
-	void UpdateSectionInfos(FRDGBuilder& GraphBuilder);
-	void UpdateAABBData(FRDGBuilder& GraphBuilder);
-	void UpdateInstanceData(FRDGBuilder& GraphBuilder);
+	RENDERER_API void UpdateSectionInfos(FRDGBuilder& GraphBuilder);
+	RENDERER_API void UpdateAABBData(FRDGBuilder& GraphBuilder);
+	RENDERER_API void UpdateInstanceData(FRDGBuilder& GraphBuilder);
 
-	void EnqueueUpdates_TS(const FLiteGPUSceneUpdate&& UpdateToEnqueue);
+	RENDERER_API void EnqueueUpdates_TS(const FLiteGPUSceneUpdate&& UpdateToEnqueue);
 
-	uint64 GetInstanceNum() const { return SceneData.InstanceNum; }
-	FLiteGPUViewBufferState GetViewBufferState() const { return ViewBufferState; }
-	FLiteGPUSceneBufferState GetSceneBufferState() const { return BufferState; }
+	inline uint64 GetInstanceNum() const { return SceneData.InstanceNum; }
+	inline FLiteGPUViewBufferState GetViewBufferState() const { return ViewBufferState; }
+	inline FLiteGPUSceneBufferState GetSceneBufferState() const { return BufferState; }
+	inline FLiteGPUSceneVertexFactory* GetVertexFactory() const 
+	{
+		return CurrentIndicesVertexBuffer ? DynamicVFMap[CurrentIndicesVertexBuffer].pGPUDrivenVertexFactory : nullptr; 
+	}
 
 protected:
 	friend class FLiteGPUSceneProxy;
@@ -249,6 +256,17 @@ protected:
 	FCriticalSection SceneUpdatesMutex;
 
 	FLiteGPUCombinedBuffer CombinedBuffer;
+	FLiteGPUViewBufferState ViewBufferState;
+	FLiteGPUSceneBufferState BufferState;
+	FLiteGPUCounterBuffers CounterBuffers;
+
+	struct DynamicVF
+	{
+		FLiteGPUSceneVertexFactory* pGPUDrivenVertexFactory = nullptr;
+		FVertexBuffer* GPUIndicesVertexBuffer;
+	};
+	TMap<FBufferRHIRef, DynamicVF> DynamicVFMap;
+	FBufferRHIRef CurrentIndicesVertexBuffer = nullptr;
 
 	FRDGAsyncScatterUploadBuffer SectionInfoUploadBuffer;
 	FRDGAsyncScatterUploadBuffer MeshAABBUploadBuffer;
@@ -257,10 +275,7 @@ protected:
 	FRDGAsyncScatterUploadBuffer InstanceTransformUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceSectorIDUploadBuffer;
 
-	FLiteGPUViewBufferState ViewBufferState;
-	FLiteGPUSceneBufferState BufferState;
-	
-	FLiteGPUCounterBuffers CounterBuffers;
+	const ERHIFeatureLevel::Type FeatureLevel;
 };
 
 FORCEINLINE FLiteGPUSceneMeshVertex::FLiteGPUSceneMeshVertex() :

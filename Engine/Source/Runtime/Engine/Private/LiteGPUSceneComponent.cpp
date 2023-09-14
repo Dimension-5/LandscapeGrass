@@ -153,8 +153,6 @@ FLiteGPUSceneProxy::FLiteGPUSceneProxy(ULiteGPUSceneRenderComponent* Component, 
 		}
 	}
 
-	pGPUDrivenVertexFactory = new FLiteGPUSceneVertexFactory(InFeatureLevel);
-
 	pVFUserData = new FLiteGPUSceneVertexFactoryUserData();
 	pVFUserData->SceneProxy = this;
 
@@ -168,7 +166,7 @@ FLiteGPUSceneProxy::FLiteGPUSceneProxy(ULiteGPUSceneRenderComponent* Component, 
 			SceneInterface->AddOrRemoveLiteGPUSceneProxy_RenderingThread(pLiteGPUSceneProxy, true);
 		}
 	);
-	BeginInitResource(pGPUDrivenVertexFactory);
+
 }
 
 FLiteGPUSceneProxy::~FLiteGPUSceneProxy()
@@ -180,12 +178,14 @@ FLiteGPUSceneProxy::~FLiteGPUSceneProxy()
 			CachedSceneInterface->AddOrRemoveLiteGPUSceneProxy_RenderingThread(this, false);
 		}
 
+		/*
 		if (nullptr != pGPUDrivenVertexFactory)
 		{
 			pGPUDrivenVertexFactory->ReleaseResource();
 			delete pGPUDrivenVertexFactory;
 			pGPUDrivenVertexFactory = nullptr;
 		}
+		*/
 
 		if (pVFUserData)
 		{
@@ -267,44 +267,47 @@ void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View
 		return;
 	}
 	int32 IndirectDrawOffset = 0;
-	for (auto& Var : MaterialToSectionIDsMap)
+	if (auto VertexFactory = Scene->GetVertexFactory())
 	{
-		const TArray<int32>& SectionIndices = Var.Value;
+		for (auto& Var : MaterialToSectionIDsMap)
+		{
+			const TArray<int32>& SectionIndices = Var.Value;
 
-		FMeshBatch& MeshBatch = Collector.AllocateMesh();
-		MeshBatch.bWireframe = false;
-		MeshBatch.VertexFactory = pGPUDrivenVertexFactory;
-		MeshBatch.MaterialRenderProxy = Var.Key;
-		MeshBatch.LODIndex = 0;
-		MeshBatch.Type = PT_TriangleList;
-		MeshBatch.DepthPriorityGroup = SDPG_World;
+			FMeshBatch& MeshBatch = Collector.AllocateMesh();
+			MeshBatch.bWireframe = false;
+			MeshBatch.VertexFactory = VertexFactory;
+			MeshBatch.MaterialRenderProxy = Var.Key;
+			MeshBatch.LODIndex = 0;
+			MeshBatch.Type = PT_TriangleList;
+			MeshBatch.DepthPriorityGroup = SDPG_World;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-		MeshBatch.VisualizeHLODIndex = 0;
+			MeshBatch.VisualizeHLODIndex = 0;
 #endif
 
-		FMeshBatchElement& BatchElement = MeshBatch.Elements[0];
-		BatchElement.IndexBuffer = Scene->CombinedBuffer.IndexBuffer;
-		BatchElement.PrimitiveUniformBuffer = GetUniformBuffer();
-		BatchElement.FirstIndex = 0;
-		BatchElement.NumPrimitives = 0;
-		BatchElement.MinVertexIndex = 0;
-		BatchElement.MaxVertexIndex = Scene->CombinedBuffer.VertexBuffer->VerticesNum - 1;
+			FMeshBatchElement& BatchElement = MeshBatch.Elements[0];
+			BatchElement.IndexBuffer = Scene->CombinedBuffer.IndexBuffer;
+			BatchElement.PrimitiveUniformBuffer = GetUniformBuffer();
+			BatchElement.FirstIndex = 0;
+			BatchElement.NumPrimitives = 0;
+			BatchElement.MinVertexIndex = 0;
+			BatchElement.MaxVertexIndex = Scene->CombinedBuffer.VertexBuffer->VerticesNum - 1;
 
-		BatchElement.UserData = (void*)pVFUserData;
-		BatchElement.bUserDataIsColorVertexBuffer = false;
-		BatchElement.InstancedLODIndex = 0;
-		BatchElement.UserIndex = 0;
-		BatchElement.NumInstances = 1;
+			BatchElement.UserData = (void*)pVFUserData;
+			BatchElement.bUserDataIsColorVertexBuffer = false;
+			BatchElement.InstancedLODIndex = 0;
+			BatchElement.UserIndex = 0;
+			BatchElement.NumInstances = 1;
 
-		BatchElement.IndirectArgsBuffer = Scene->ViewBufferState.RWIndirectDrawBuffer->GetRHI();
-		BatchElement.IndirectArgsOffset = IndirectDrawOffset * sizeof(LiteGPUSceneIndirectArguments);
+			BatchElement.IndirectArgsBuffer = Scene->ViewBufferState.RWIndirectDrawBuffer->GetRHI();
+			BatchElement.IndirectArgsOffset = IndirectDrawOffset * sizeof(LiteGPUSceneIndirectArguments);
 
-		BatchElement.FirstInstance = 0;
-		BatchElement.IndirectDrawCount = MaterialToSectionIDsMap.Num();
-		BatchElement.IndirectBufferStride = sizeof(LiteGPUSceneIndirectArguments);
+			BatchElement.FirstInstance = 0;
+			BatchElement.IndirectDrawCount = MaterialToSectionIDsMap.Num();
+			BatchElement.IndirectBufferStride = sizeof(LiteGPUSceneIndirectArguments);
 
-		IndirectDrawOffset += SectionIndices.Num();
-		Collector.AddMesh(ViewIndex, MeshBatch);
+			IndirectDrawOffset += SectionIndices.Num();
+			Collector.AddMesh(ViewIndex, MeshBatch);
+		}
 	}
 }
 
@@ -317,7 +320,6 @@ void FLiteGPUSceneProxy::Init_RenderingThread()
 {
 	check(Scene->CombinedBuffer.bInitialized);
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Call FLiteGPUSceneProxy::Init_RenderingThread"));
-	pGPUDrivenVertexFactory->Init_RenderThread(Scene->CombinedBuffer.VertexBuffer, nullptr);// TODO: Scene->InstanceIndicesBuffer);
 }
 
 void ULiteGPUSceneRenderComponent::OnRegister()

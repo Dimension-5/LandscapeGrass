@@ -91,13 +91,11 @@ void FLiteGPUSceneVertexFactory::InitRHI(FRHICommandListBase& RHICmdList)
 			));
 		}
 	}
-	/*
 	if (bInstanced)
 	{
 		// Third texture coord optimization xxy
 		Elements.Add(AccessStreamComponent(FLiteGPUSceneVertexFactory::Data.InstanceIndicesComponent, 6));
 	}
-	*/
 	// we don't need per-vertex shadow or lightmap rendering
 	InitDeclaration(Elements);
 }
@@ -120,7 +118,6 @@ void FLiteGPUSceneVertexFactory::Init_RenderThread(const FLiteGPUSceneMeshVertex
 	NewData.TangentBasisComponents[1] = STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer, FLiteGPUSceneMeshVertex, TangentZ, VET_PackedNormal);
 	NewData.ColorComponent = STRUCTMEMBER_VERTEXSTREAMCOMPONENT(VertexBuffer, FLiteGPUSceneMeshVertex, Color, VET_Color);
 
-	/*
 	NewData.InstanceIndicesComponent = FVertexStreamComponent(
 		InstanceIndiceBuffer,
 		0,
@@ -128,7 +125,6 @@ void FLiteGPUSceneVertexFactory::Init_RenderThread(const FLiteGPUSceneMeshVertex
 		EVertexElementType::VET_Float1,
 		EVertexStreamUsage::Instancing
 	);
-	*/
 	SetData(NewData);
 	bInitialized = true;
 }

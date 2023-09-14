@@ -251,7 +251,7 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 void ALiteGPUSceneManager::BuildLiteGPUScene()
 {
 	const auto StartTime = FDateTime::UtcNow();
-	Scene = MakeShared<FLiteGPUScene>();
+	Scene = MakeShared<FLiteGPUScene>(GetRootComponent()->GetScene()->GetFeatureLevel());
 
 	// Glob all components
 	Components.Empty();
