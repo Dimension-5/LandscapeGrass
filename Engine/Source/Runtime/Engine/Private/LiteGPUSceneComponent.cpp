@@ -201,6 +201,7 @@ FPrimitiveViewRelevance FLiteGPUSceneProxy::GetViewRelevance(const FSceneView* V
 	Result.bDrawRelevance = IsShown(View);
 	Result.bShadowRelevance = IsShadowCast(View);
 	Result.bDynamicRelevance = true;
+	Result.bRenderInDepthPass = true;
 	Result.bRenderCustomDepth = ShouldRenderCustomDepth();
 	Result.bDistortion = true;
 	Result.bNormalTranslucency = true;
@@ -269,12 +270,12 @@ void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View
 	int32 IndirectDrawOffset = 0;
 	if (auto VertexFactory = Scene->GetVertexFactory())
 	{
-		for (auto& Var : MaterialToSectionIDsMap)
+		for (const auto& Var : MaterialToSectionIDsMap)
 		{
-			const TArray<int32>& SectionIndices = Var.Value;
-
 			FMeshBatch& MeshBatch = Collector.AllocateMesh();
 			MeshBatch.bWireframe = false;
+			MeshBatch.bUseForMaterial = true;
+			MeshBatch.bUseForDepthPass = true;
 			MeshBatch.VertexFactory = VertexFactory;
 			MeshBatch.MaterialRenderProxy = Var.Key;
 			MeshBatch.LODIndex = 0;
@@ -299,13 +300,15 @@ void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View
 			BatchElement.NumInstances = 1;
 
 			BatchElement.IndirectArgsBuffer = Scene->ViewBufferState.RWIndirectDrawBuffer->GetRHI();
+			check(BatchElement.IndirectArgsBuffer != nullptr);
 			BatchElement.IndirectArgsOffset = IndirectDrawOffset * sizeof(LiteGPUSceneIndirectArguments);
 
 			BatchElement.FirstInstance = 0;
-			BatchElement.IndirectDrawCount = MaterialToSectionIDsMap.Num();
+			BatchElement.IndirectDrawCount = Var.Value.Num();
+			check(BatchElement.IndirectDrawCount != 0);
 			BatchElement.IndirectBufferStride = sizeof(LiteGPUSceneIndirectArguments);
 
-			IndirectDrawOffset += SectionIndices.Num();
+			IndirectDrawOffset += Var.Value.Num();
 			Collector.AddMesh(ViewIndex, MeshBatch);
 		}
 	}
@@ -320,6 +323,12 @@ void FLiteGPUSceneProxy::Init_RenderingThread()
 {
 	check(Scene->CombinedBuffer.bInitialized);
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Call FLiteGPUSceneProxy::Init_RenderingThread"));
+}
+
+ULiteGPUSceneRenderComponent::ULiteGPUSceneRenderComponent(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	BodyInstance.bSimulatePhysics = false;
 }
 
 void ULiteGPUSceneRenderComponent::OnRegister()
@@ -340,6 +349,15 @@ void ULiteGPUSceneRenderComponent::GetUsedMaterials(TArray<UMaterialInterface*>&
 	{
 		OutMaterials.Add(Scene->CombinedData.Materials[MatIndex]);
 	}
+}
+
+FBoxSphereBounds ULiteGPUSceneRenderComponent::CalcBounds(const FTransform& BoundTransform) const
+{
+	// infinite bounds. TODO: accumulate actual bounds? will result in unstable depth sorting...
+	float f = 9999999.0f;
+	return FBoxSphereBounds(FBox(-FVector(f, f, f), FVector(f, f, f)));
+	// return Super::CalcBounds(BoundTransform);
+	// return FBoxSphereBounds(BoundTransform.GetLocation(), FVector::ZeroVector, 0.f);
 }
 
 FPrimitiveSceneProxy* ULiteGPUSceneRenderComponent::CreateSceneProxy()

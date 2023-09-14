@@ -5,33 +5,13 @@ float4 Float3VectorTransform(float3 vec, float4x4 mtx)
 	return vec.x * mtx[0] + (vec.y * mtx[1] + (vec.z * mtx[2] + mtx[3]));
 }
 
-/*
-struct FLiteGPUInstanceAttribute
-{
-	uint8_t Type;
-	uint8_t SectionID;
-	uint8_t SectionNum;
-	uint8_t Padding;
-};
-*/
-
 Buffer<float4> InstanceTransformBuffer;
-Buffer<uint> InstanceAttributeBuffer;
+Buffer<uint> InstanceTypeBuffer;
 Buffer<float4> AABBBuffer;
 
 uint GetTypeID(uint InstanceID)
 {
-	return (InstanceAttributeBuffer[InstanceID] & 0x000000ff);
-}
-
-uint GetSectionID(uint InstanceID)
-{
-	return (InstanceAttributeBuffer[InstanceID] & 0x0000ff00);
-}
-
-uint GetSectionNum(uint InstanceID)
-{
-	return (InstanceAttributeBuffer[InstanceID] & 0x00ff0000);
+	return InstanceTypeBuffer[InstanceID];
 }
 
 uint NumInstances;
@@ -257,7 +237,7 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 					if (bInstanceUnCulled)
 					{
 						uint InsertIndex = BaseInsertIndex + WavePrefixCountBits(bInstanceUnCulled);
-						RWUnCulledInstanceBuffer[InsertIndex] = (int)radius;
+						RWUnCulledInstanceBuffer[InsertIndex] = (int)InstanceID;
 					}
 				}
 #else
@@ -268,7 +248,7 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 					InterlockedAdd(RWUnCulledInstanceIndirectParameters[1], 1u);
 #endif
 					InterlockedAdd(RWUnCulledInstanceNum[0], 1u, InsertIndex);
-					RWUnCulledInstanceBuffer[InsertIndex] = (int)radius;
+					RWUnCulledInstanceBuffer[InsertIndex] = (int) InstanceID;
 				}
 #endif
 			}
@@ -342,7 +322,7 @@ void DebugLiteGPUSceneVS(in FDebugVertexInput VSIn,
 {
 	//int InstanceIndex = VSIn.InstanceId;
 	int InstanceIndex = CulledLeafInstanceBuffer[VSIn.InstanceId];
-	uint InstanceType = GetTypeID(InstanceID);
+	uint InstanceType = GetTypeID(InstanceIndex);
 		
 	float4 LocalAABBMin = AABBBuffer[2 * InstanceType + 0];
 	float4 LocalAABBMax = AABBBuffer[2 * InstanceType + 1];

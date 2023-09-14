@@ -101,23 +101,11 @@ float3 ViewLocation;
 float3 ViewForward;
 
 Buffer<float4> InstanceTransformBuffer;
-Buffer<uint> InstanceAttributeBuffer;
 Buffer<float4> AABBSectionBuffer;
 
-uint GetTypeID(uint InstanceID)
-{
-	return (InstanceAttributeBuffer[InstanceID] & 0x000000ff);
-}
-
-uint GetSectionID(uint InstanceID)
-{
-	return (InstanceAttributeBuffer[InstanceID] & 0x0000ff00);
-}
-
-uint GetSectionNum(uint InstanceID)
-{
-	return (InstanceAttributeBuffer[InstanceID] & 0x00ff0000);
-}
+Buffer<uint> InstanceTypeBuffer;
+Buffer<uint> InstanceSectionNumBuffer;
+Buffer<uint> InstanceSectionIDBuffer;
 
 #ifndef Generate_Instance_Count_Pass
 #define Generate_Instance_Count_Pass 0
@@ -136,8 +124,8 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 		float ScreenSize = min(UnCulledInstanceScreenSize[InstanceID], InstanceMaxScreenSize);
 
 		uint SectionStart = InstanceID * PerSectionMaxNum;
-		uint SectionNum = GetSectionNum(InstanceID);
-		uint TypeIndex = GetTypeID(InstanceID);
+		uint SectionNum = InstanceSectionNumBuffer[InstanceID];
+		uint TypeIndex = InstanceTypeBuffer[InstanceID];
 		
 		float4 LocalAABBMin = AABBSectionBuffer[2 * TypeIndex + 0];
 		float4 LocalAABBMax = AABBSectionBuffer[2 * TypeIndex + 1];
@@ -158,10 +146,9 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 		float3 AABBExtent = CalcBoundExtent(LocalAABBExtent, InstanceTransform);
 		Radius = CalcBoundSphereRadius(Radius, AABBExtent, InstanceTransform);
 		float CameraDrawDistance = ComputeBoundsDrawDistance(ScreenSize, Radius, ProjMatrix);
-		uint ID = 0;
-		for (ID = 0; ID < SectionNum; ID++)
+		for (uint ID = 0; ID < SectionNum; ID++)
 		{
-			uint SectionID = GetSectionID(SectionStart + ID);
+			uint SectionID = InstanceSectionIDBuffer[SectionStart + ID];
 			if (SectionID >= 0)
 			{
 				float4 SectionScreenSize = AllSectionInfoBuffer[2 * SectionID + 1];
@@ -177,7 +164,6 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 				
 				if (CameraDrawDistance >= (ClosestCameraDistance) && CameraDrawDistance < (FarthestCameraDistance))
 				{
-					
 #if Generate_Instance_Count_Pass > 0
 					// Record the number that this Section needs to be rendered after culling
 					// First we need to know the drawing offset of each type of Section

@@ -115,14 +115,6 @@ struct FLiteGPUSceneUpdate
 	TArray64<uint32> InstanceIndices; // The Indices of the instance that are dirty
 };
 
-struct FLiteGPUInstanceAttribute
-{
-	uint8 Type;
-	uint8 SectionID;
-	uint8 SectionNum;
-	uint8 Padding;
-};
-
 struct FSectorInfo
 {
 	FInt64Vector2 Coordinate;
@@ -163,7 +155,9 @@ struct FLiteGPUSceneBufferState
 	TRefCountPtr<FRDGPooledBuffer> SectionInfoBuffer;
 	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
 	TRefCountPtr<FRDGPooledBuffer> SectorInfoBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceAttributeBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceTypeBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceSectionNumBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceSectionIDBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
 };
@@ -274,7 +268,9 @@ protected:
 	FRDGAsyncScatterUploadBuffer SectionInfoUploadBuffer;
 	FRDGAsyncScatterUploadBuffer MeshAABBUploadBuffer;
 	FRDGAsyncScatterUploadBuffer SectorInfoUploadBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceAttributeUploadBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceTypeUploadBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceSectionNumUploadBuffer;
+	FRDGAsyncScatterUploadBuffer InstanceSectionIDUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceTransformUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceSectorIDUploadBuffer;
 

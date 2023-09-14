@@ -109,12 +109,13 @@ public:
 UCLASS()
 class ENGINE_API ULiteGPUSceneRenderComponent : public UPrimitiveComponent
 {
-	GENERATED_BODY()
+	GENERATED_UCLASS_BODY()
 
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
 	FPrimitiveSceneProxy* CreateSceneProxy() override;
 	void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /* = false */) const;
+	virtual FBoxSphereBounds CalcBounds(const FTransform& BoundTransform) const override;
 
 	friend class ALiteGPUSceneManager;
 	friend class FLiteGPUSceneProxy;
