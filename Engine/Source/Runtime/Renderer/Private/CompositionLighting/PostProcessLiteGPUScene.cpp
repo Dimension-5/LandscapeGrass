@@ -504,6 +504,7 @@ namespace LiteGPUScene::Detail
 			auto Parameters = GraphBuilder.AllocParameters<FComputeInstanceSectionOffsetCS::FParameters>();
 			Parameters->AllSectionNum = AllSectionNum;
 			Parameters->AllSectionInfoBuffer = GraphBuilder.CreateSRV(Buffers.SectionInfoBuffer, PF_A32B32G32R32F);
+			Parameters->SectionCountCopyBuffer = GraphBuilder.CreateSRV(Buffers.RWSectionCountCopyBuffer, PF_R32_UINT);
 
 			Parameters->RWSectionCountOffsetBuffer = GraphBuilder.CreateUAV(Buffers.RWSectionCountCopyBuffer, PF_R32_UINT);
 			Parameters->RWNextSectionCountOffsetBuffer = GraphBuilder.CreateUAV(Buffers.RWNextSectionCountOffsetBuffer, PF_R32_UINT);

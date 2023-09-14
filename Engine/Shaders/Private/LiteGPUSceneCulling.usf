@@ -21,17 +21,17 @@ Buffer<float4> AABBBuffer;
 
 uint GetTypeID(uint InstanceID)
 {
-	return (InstanceAttributeBuffer[InstanceID] >> 24);
+	return (InstanceAttributeBuffer[InstanceID] & 0x000000ff);
 }
 
 uint GetSectionID(uint InstanceID)
 {
-	return (InstanceAttributeBuffer[InstanceID] >> 16);
+	return (InstanceAttributeBuffer[InstanceID] & 0x0000ff00);
 }
 
 uint GetSectionNum(uint InstanceID)
 {
-	return (InstanceAttributeBuffer[InstanceID] >> 8);
+	return (InstanceAttributeBuffer[InstanceID] & 0x00ff0000);
 }
 
 uint NumInstances;
