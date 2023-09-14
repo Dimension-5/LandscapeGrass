@@ -206,9 +206,6 @@ struct FLiteGPUSceneBufferState
 	TRefCountPtr<FRDGPooledBuffer> InstanceAttributeBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
-
-	FRDGBufferSRV* InstanceTransformBufferSRV = nullptr;
-	FRDGBufferSRV* InstanceSectorIDBufferSRV = nullptr;
 };
 
 struct RENDERER_API FLiteGPUScene

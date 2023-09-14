@@ -346,26 +346,17 @@ FRDGBuffer* ResizeStructuredBufferIfNeededAligned(FRDGBuilder& GraphBuilder, TRe
 void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 {
 	const auto Capacity = SceneData.InstanceCapacity;
+	const auto SectorCount = SceneData.SectorInfos.Num();
 	if (Capacity != 0)
 	{
 		RDG_GPU_STAT_SCOPE(GraphBuilder, LiteGPUSceneUpdate);
 
 		UpdateViewBuffers(GraphBuilder);
 
-		// TYPE & SECTION INFOS
-		// BufferState.InstanceIndicesBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, InstanceIndicesBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.Indices"));
 		auto InstanceAttributeBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceAttributeBuffer, Capacity * sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Attributes"));
-
-		// SECTORS
-		const auto SectorCount = SceneData.SectorInfos.Num();
 		auto SectorInfoBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.SectorInfoBuffer, SectorCount * sizeof(FSectorInfo), TEXT("LiteGPUScene.SectorInfos"));
-		auto SectorInfoBufferSRV = GraphBuilder.CreateSRV(SectorInfoBuffer);
-
-		// TRANSFORMS
 		auto InstanceTransformBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBuffer, Capacity * sizeof(FMatrix44f), TEXT("LiteGPUScene.Transforms"));
-		auto InstanceTransformBufferSRV = GraphBuilder.CreateSRV(InstanceTransformBuffer);
 		auto InstanceSectorIDBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceSectorIDBuffer, Capacity * sizeof(uint32), TEXT("LiteGPUScene.SectorIDs"));
-		auto InstanceSectorIDBufferSRV = GraphBuilder.CreateSRV(InstanceSectorIDBuffer);
 		
 		FLiteGPUSceneUpdate Update;
 		{

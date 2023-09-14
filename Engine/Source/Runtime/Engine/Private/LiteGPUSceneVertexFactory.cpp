@@ -30,7 +30,7 @@ void FLiteGPUSceneVertexFactoryShaderParameters::GetElementShaderBindings(const 
 	if (FLiteGPUSceneProxy* SceneProxy = BatchElementParams->SceneProxy)
 	{
 		const auto& BufferStates = SceneProxy->Scene->BufferState;
-		auto TransformBufferSRV = BufferStates.InstanceTransformBufferSRV->GetRHI();
+		auto TransformBufferSRV = BufferStates.InstanceTransformBuffer->GetSRV();
 		ShaderBindings.Add(VertexFetch_PerInstanceTransformParameter, TransformBufferSRV);
 	}
 }
