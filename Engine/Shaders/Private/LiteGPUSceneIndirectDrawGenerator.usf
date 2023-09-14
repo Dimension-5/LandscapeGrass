@@ -1,0 +1,230 @@
+#include "/Engine/Public/Platform.ush"
+
+#ifndef THREAD_COUNT
+#define THREAD_COUNT 512
+#endif
+
+float4x4 ProjMatrix;
+
+float InstanceMaxScreenSize;
+float InstanceScreenSizeBias;
+float InstanceScreenSizeScale;
+
+uint AllSectionNum;
+Buffer<float4> AllSectionInfoBuffer;
+
+Buffer<uint> SectionCountOffsetBuffer;
+Buffer<uint> UnCulledInstanceNum;
+
+RWBuffer<uint> RWIndirectDrawBuffer;
+
+RWBuffer<uint> RWSectionCountBuffer;
+RWBuffer<uint> RWSectionCountOffsetBuffer;
+
+uint AllInstanceIndexNum;
+RWBuffer<float> RWInstanceIndiceBuffer;
+RWBuffer<uint> RWIndirectDrawDispatchIndiretBuffer;
+RWBuffer<uint> RWSectionCountCopyBuffer;
+RWBuffer<uint> RWNextSectionCountOffsetBuffer;
+
+#ifndef ENABLE_LITE_GPU_SCENE_DEBUG
+#define  ENABLE_LITE_GPU_SCENE_DEBUG 0
+#endif
+
+float3 CalcBoundExtent(float3 extent, float4x4 M)
+{
+	float4 ret = 0;
+	ret = abs(float4(extent.x, extent.x, extent.x, extent.x) * M[0]);
+	ret += abs(float4(extent.y, extent.y, extent.y, extent.y) * M[1]);
+	ret += abs(float4(extent.z, extent.z, extent.z, extent.z) * M[2]);
+	return ret.xyz;
+}
+
+float CalcBoundSphereRadius(float radius, float3 extent, float4x4 M)
+{
+	float4 scale = 0;
+	scale = M[0] * M[0];
+	scale += M[1] * M[1];
+	scale += M[2] * M[2];
+	float radiusScale2 = max(max(scale.x, scale.y), scale.z);
+	float BoxExtendMagnitude = sqrt(dot(extent, extent));
+	return max(sqrt(radiusScale2) * radius, BoxExtendMagnitude);
+}
+float ComputeBoundsDrawDistance(float ScreenSize, float SphereRadius, float4x4 InProjMatrix)
+{
+	float ScreenMultiple = max(0.5f * InProjMatrix[0][0], 0.5f * InProjMatrix[1][1]);
+	float ScreenRadius = max(1.e-8f, ScreenSize * 0.5f);
+	return (ScreenMultiple * SphereRadius) / ScreenRadius;
+}
+
+float ComputeBoundsScreenSize(float3 BoundOrigin, float SphereRadius, float3 InViewOrigin, float4x4 InProjMatrix)
+{
+	float Dist = distance(BoundOrigin, InViewOrigin);
+	float ScreenMultiple = max(0.5f * InProjMatrix[0][0], 0.5f * InProjMatrix[1][1]);
+	float ScreenRadius = ScreenMultiple * SphereRadius / max(1.0f, Dist);
+	return ScreenRadius * 2.0f;
+}
+
+[numthreads(THREAD_COUNT, 1, 1)]
+void ClearVisibleInstanceCS(uint3 DTid : SV_DispatchThreadID)
+{
+	const uint UniqueID = DTid.x;
+	
+	if (UniqueID < AllInstanceIndexNum)
+	{
+		RWInstanceIndiceBuffer[UniqueID] = -1;
+	}
+	
+	if ( UniqueID < AllSectionNum)
+	{
+		RWSectionCountBuffer[UniqueID] = 0;
+		RWSectionCountCopyBuffer[UniqueID] = 0;
+		RWSectionCountOffsetBuffer[UniqueID] = 0;
+	}
+	
+	if (UniqueID == 0)
+	{
+		float fStep = (float) THREAD_COUNT;
+		
+		RWIndirectDrawDispatchIndiretBuffer[0] = max(1u, (uint) ceil(UnCulledInstanceNum[0] / fStep));
+		RWIndirectDrawDispatchIndiretBuffer[1] = 1u;
+		RWIndirectDrawDispatchIndiretBuffer[2] = 1u;
+		
+		RWNextSectionCountOffsetBuffer[0] = 0;
+	}
+}
+
+Buffer<float> UnCulledInstanceScreenSize;
+Buffer<int> UnCulledInstanceBuffer;
+
+float3 ViewLocation;
+float3 ViewForward;
+
+Buffer<float4> InstanceTransformBuffer;
+Buffer<uint> InstanceAttributeBuffer;
+Buffer<float4> AABBSectionBuffer;
+
+uint GetTypeID(uint InstanceID)
+{
+	return (InstanceAttributeBuffer[InstanceID] >> 24);
+}
+
+uint GetSectionID(uint InstanceID)
+{
+	return (InstanceAttributeBuffer[InstanceID] >> 16);
+}
+
+uint GetSectionNum(uint InstanceID)
+{
+	return (InstanceAttributeBuffer[InstanceID] >> 8);
+}
+
+#ifndef Generate_Instance_Count_Pass
+#define Generate_Instance_Count_Pass 0
+#endif
+
+int PerSectionMaxNum;
+
+[numthreads(THREAD_COUNT, 1, 1)]
+void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
+{
+	const uint UniqueID = DTid.x;
+	const uint kUnCulledInstanceNum = UnCulledInstanceNum[0];
+	if (UniqueID < kUnCulledInstanceNum)
+	{
+		const int InstanceID = UnCulledInstanceBuffer[UniqueID];
+		float ScreenSize = min(UnCulledInstanceScreenSize[InstanceID], InstanceMaxScreenSize);
+
+		uint SectionStart = InstanceID * PerSectionMaxNum;
+		uint SectionNum = GetSectionNum(InstanceID);
+		uint TypeIndex = GetTypeID(InstanceID);
+		
+		float4 LocalAABBMin = AABBSectionBuffer[2 * TypeIndex + 0];
+		float4 LocalAABBMax = AABBSectionBuffer[2 * TypeIndex + 1];
+		
+		float Radius = LocalAABBMin.w;
+		float3 LocalAABBExtent = (LocalAABBMax.xyz - LocalAABBMin.xyz) / 2.0f;
+		
+		float4 InstanceTransform0 = InstanceTransformBuffer[InstanceID * 4 + 0];
+		float4 InstanceTransform1 = InstanceTransformBuffer[InstanceID * 4 + 1];
+		float4 InstanceTransform2 = InstanceTransformBuffer[InstanceID * 4 + 2];
+		float4 InstanceTransform3 = InstanceTransformBuffer[InstanceID * 4 + 3];
+		
+		float4x4 InstanceTransform = float4x4(InstanceTransform0,
+	                InstanceTransform1,
+					InstanceTransform2,
+					InstanceTransform3);
+		
+		float3 AABBExtent = CalcBoundExtent(LocalAABBExtent, InstanceTransform);
+		Radius = CalcBoundSphereRadius(Radius, AABBExtent, InstanceTransform);
+		float CameraDrawDistance = ComputeBoundsDrawDistance(ScreenSize, Radius, ProjMatrix);
+		uint ID = 0;
+		for (ID = 0; ID < SectionNum; ID++)
+		{
+			uint SectionID = GetSectionID(SectionStart + ID);
+			if (SectionID >= 0)
+			{
+				float4 SectionScreenSize = AllSectionInfoBuffer[2 * SectionID + 1];
+				
+				float ScreenSizeMin = SectionScreenSize.x * InstanceScreenSizeScale;
+				if (ScreenSizeMin > 0)
+				{
+					ScreenSizeMin += InstanceScreenSizeBias;
+				}
+				float ScreenSizeMax = SectionScreenSize.y*InstanceScreenSizeScale + InstanceScreenSizeBias;
+				float FarthestCameraDistance = ComputeBoundsDrawDistance(ScreenSizeMin, Radius, ProjMatrix);
+				float ClosestCameraDistance = ComputeBoundsDrawDistance(ScreenSizeMax, Radius, ProjMatrix);
+				
+				if (CameraDrawDistance >= (ClosestCameraDistance) && CameraDrawDistance < (FarthestCameraDistance))
+				{
+					
+#if Generate_Instance_Count_Pass > 0
+					// Record the number that this Section needs to be rendered after culling
+					// First we need to know the drawing offset of each type of Section
+					// So this pass runs first
+					InterlockedAdd(RWSectionCountCopyBuffer[SectionID], 1u);
+#else
+					// Now we can fill the instance id to correct position
+					uint SectionInstanceIndexStart = SectionCountOffsetBuffer[SectionID];
+					uint insert = 0;
+					InterlockedAdd(RWSectionCountBuffer[SectionID], 1u, insert);
+					RWInstanceIndiceBuffer[SectionInstanceIndexStart + insert] = (float) InstanceID;
+#endif
+				}
+			}
+		}
+	}
+}
+
+Buffer<uint> SectionCountCopyBuffer;
+
+[numthreads(THREAD_COUNT, 1, 1)]
+void ComputeInstanceSectionOffsetCS(uint3 DTid : SV_DispatchThreadID)
+{
+	const uint UniqueID = DTid.x;
+	if (UniqueID < AllSectionNum)
+	{
+		uint SectionCount = SectionCountCopyBuffer[UniqueID];
+		uint SectionStartOffset;
+		InterlockedAdd(RWNextSectionCountOffsetBuffer[0], SectionCount, SectionStartOffset);
+		RWSectionCountOffsetBuffer[UniqueID] = SectionStartOffset;
+		
+		uint SectionID = UniqueID;
+		
+		float4 SectionInfo = AllSectionInfoBuffer[2 * SectionID + 0];
+		
+		uint SectionIndexNum = (uint) floor(SectionInfo.y + 0.5f);
+		// Index Count
+		RWIndirectDrawBuffer[5 * SectionID + 0] = SectionIndexNum;
+		// Instance Count
+		RWIndirectDrawBuffer[5 * SectionID + 1] = SectionCount;
+		// First Index
+		RWIndirectDrawBuffer[5 * SectionID + 2] = (uint) floor(SectionInfo.x + 0.5f);
+		// BaseVertexLocation
+		RWIndirectDrawBuffer[5 * SectionID + 3] = (uint) floor(SectionInfo.z + 0.5f);
+		// First Instance
+		RWIndirectDrawBuffer[5 * SectionID + 4] = SectionStartOffset;
+	}
+}
+
+

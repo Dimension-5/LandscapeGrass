@@ -99,37 +99,6 @@ struct FLiteGPUCombinedBuffer
 	bool bInitialized = false;
 };
 
-struct FLiteGPUCounterBuffers
-{
-	/*
-	 * Since it's instancing , A section might be drawed multiple times
-	 * This buffer stores the draw number of each section (section at certain lod)
-	 * SectionCount(SectionID) = RWSectionCountCopyBuffer[SectionID]
-	 */
-	FRDGBufferHandle RWSectionCountCopyBuffer;
-	FRDGBufferHandle RWSectionCountBuffer;
-
-	/*
-	 * Since it's instancing , A section might be drawed multiple times
-	 * We organize the draw of same section together and close
-	 * This buffer stores the starting offset of one type of section
-	 * SectionStartOffset(SectionID) =RWSectionCountOffsetBuffer[SectionID]
-	 *
-	 * Therefore, the data we need to draw a section of "SectionID" locates at
-	 * [SectionStartOffset(SectionID),SectionStartOffset(SectionID)+SectionCount(SectionID)]
-	 */
-	FRDGBufferHandle RWSectionCountOffsetBuffer;
-	/*
-	 * This buffer is a size-1 uint which helps calculate the SectionStartOffset
-	 *
-	 *		uint SectionStartOffset;
-	 *		InterlockedAdd(RWNextSectionhCountOffsetBuffer[0], SectionCount, SectionStartOffset);
-	 *		RWSectionCountOffsetBuffer[UniqueID] = SectiontartOffset;
-	 *
-	 */
-	FRDGBufferHandle RWNextSectionCountOffsetBuffer;
-};
-
 struct FLiteGPUViewData
 {
 	FConvexVolume ViewFrustum;
@@ -189,6 +158,16 @@ struct FLiteGPUSceneData
 	TArray64<uint32> SectionInstanceNums; // Number of instances that references the section
 };
 
+struct FLiteGPUSceneBufferState
+{
+	TRefCountPtr<FRDGPooledBuffer> SectionInfoBuffer;
+	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
+	TRefCountPtr<FRDGPooledBuffer> SectorInfoBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceAttributeBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
+};
+
 struct FLiteGPUViewBufferState
 {
 	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceScreenSize;
@@ -201,14 +180,34 @@ struct FLiteGPUViewBufferState
 	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceIndirectParameters;
 };
 
-struct FLiteGPUSceneBufferState
+struct FLiteGPUCounterBufferState
 {
-	TRefCountPtr<FRDGPooledBuffer> SectionInfoBuffer;
-	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
-	TRefCountPtr<FRDGPooledBuffer> SectorInfoBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceAttributeBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
+	/*
+	 * Since it's instancing , A section might be drawed multiple times
+	 * This buffer stores the draw number of each section (section at certain lod)
+	 * SectionCount(SectionID) = RWSectionCountCopyBuffer[SectionID]
+	 */
+	TRefCountPtr<FRDGPooledBuffer> RWSectionCountCopyBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWSectionCountBuffer;
+	/*
+	 * Since it's instancing , A section might be drawed multiple times
+	 * We organize the draw of same section together and close
+	 * This buffer stores the starting offset of one type of section
+	 * SectionStartOffset(SectionID) =RWSectionCountOffsetBuffer[SectionID]
+	 *
+	 * Therefore, the data we need to draw a section of "SectionID" locates at
+	 * [SectionStartOffset(SectionID),SectionStartOffset(SectionID)+SectionCount(SectionID)]
+	 */
+	TRefCountPtr<FRDGPooledBuffer> RWSectionCountOffsetBuffer;
+	/*
+	 * This buffer is a size-1 uint which helps calculate the SectionStartOffset
+	 *
+	 *		uint SectionStartOffset;
+	 *		InterlockedAdd(RWNextSectionhCountOffsetBuffer[0], SectionCount, SectionStartOffset);
+	 *		RWSectionCountOffsetBuffer[UniqueID] = SectiontartOffset;
+	 *
+	 */
+	TRefCountPtr<FRDGPooledBuffer> RWNextSectionCountOffsetBuffer;
 };
 
 struct FLiteGPUScene
@@ -225,8 +224,11 @@ public:
 	RENDERER_API void EnqueueUpdates_TS(const FLiteGPUSceneUpdate&& UpdateToEnqueue);
 
 	inline uint64 GetInstanceNum() const { return SceneData.InstanceNum; }
+	inline uint64 GetSectionNum() const { return SceneData.TotalSectionNum; }
+	inline uint64 GetPerSectionMaxNum() const { return SceneData.PerSectionMaxNum; }
 	inline FLiteGPUViewBufferState GetViewBufferState() const { return ViewBufferState; }
 	inline FLiteGPUSceneBufferState GetSceneBufferState() const { return BufferState; }
+	inline FLiteGPUCounterBufferState GetCounterBufferState() const { return CounterBufferState; }
 	inline FLiteGPUSceneVertexFactory* GetVertexFactory() const 
 	{
 		return CurrentIndicesVertexBuffer ? DynamicVFMap[CurrentIndicesVertexBuffer].pGPUDrivenVertexFactory : nullptr; 
@@ -239,6 +241,7 @@ protected:
 	friend struct FLiteGPUSceneVertexFactoryShaderParameters;
 
 	void UpdateViewBuffers(FRDGBuilder& GraphBuilder);
+	void UpdateSectionBuffers(FRDGBuilder& GraphBuilder);
 
 	void buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
 	void buildSceneData(const TArray<TObjectPtr<UStaticMesh>> InAllMeshes);
@@ -258,7 +261,7 @@ protected:
 	FLiteGPUCombinedBuffer CombinedBuffer;
 	FLiteGPUViewBufferState ViewBufferState;
 	FLiteGPUSceneBufferState BufferState;
-	FLiteGPUCounterBuffers CounterBuffers;
+	FLiteGPUCounterBufferState CounterBufferState;
 
 	struct DynamicVF
 	{

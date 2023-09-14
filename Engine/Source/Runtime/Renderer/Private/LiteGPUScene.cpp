@@ -55,9 +55,9 @@ void FLiteGPUScene::fillMeshLODSectionData(int32 LodIndex, const FStaticMeshRend
 		{
 			VertexColor = LODResource.VertexBuffers.ColorVertexBuffer.VertexColor(RealVertexIdx);
 		}
-		FLiteGPUSceneMeshVertex FoliageMeshVertex(Pos, TangentX, TangentZ, UV, UV2, UV3, VertexColor);
-		OutCombinedVertexBufferData.Add(FoliageMeshVertex);
-		RawVertices.Add(FoliageMeshVertex);
+		FLiteGPUSceneMeshVertex MeshVertex(Pos, TangentX, TangentZ, UV, UV2, UV3, VertexColor);
+		OutCombinedVertexBufferData.Add(MeshVertex);
+		RawVertices.Add(MeshVertex);
 		IndicesMap.Add(RealVertexIdx, RawVertexIdx);
 
 		RawVertexIdx++;
@@ -190,21 +190,21 @@ void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSour
 	// Stores AABB with BL-UR format
 	TArray<FVector4f> AABBs;
 	AABBs.SetNum(2 * SceneData.InstanceTypeNum);
-	for (int32 FoliageIndex = 0; FoliageIndex < SceneData.InstanceTypeNum; FoliageIndex++)
+	for (int32 Index = 0; Index < SceneData.InstanceTypeNum; Index++)
 	{
-		if (AllSourceMeshes[FoliageIndex])
+		if (AllSourceMeshes[Index])
 		{
-			FBoxSphereBounds MeshBound = AllSourceMeshes[FoliageIndex]->GetBounds();
+			FBoxSphereBounds MeshBound = AllSourceMeshes[Index]->GetBounds();
 			FBox Box = MeshBound.GetBox();
 			FVector Min = Box.Min;
 			FVector Max = Box.Max;
-			AABBs[FoliageIndex * 2 + 0] = FVector4f(Min.X, Min.Y, Min.Z, MeshBound.SphereRadius);
-			AABBs[FoliageIndex * 2 + 1] = FVector4f(Max.X, Max.Y, Max.Z, 0);
+			AABBs[Index * 2 + 0] = FVector4f(Min.X, Min.Y, Min.Z, MeshBound.SphereRadius);
+			AABBs[Index * 2 + 1] = FVector4f(Max.X, Max.Y, Max.Z, 0);
 		}
 		else
 		{
-			AABBs[FoliageIndex * 2 + 0] = FVector4f(-50.0f, -50.0f, -50.0f, 0);
-			AABBs[FoliageIndex * 2 + 1] = FVector4f(50.0f, 50.0f, 50.0f, 0);
+			AABBs[Index * 2 + 0] = FVector4f(-50.0f, -50.0f, -50.0f, 0);
+			AABBs[Index * 2 + 1] = FVector4f(50.0f, 50.0f, 50.0f, 0);
 		}
 	}
 	SceneData.SectionAABBData.SetNum(2 * sizeof(FVector4f) * SceneData.InstanceTypeNum);
@@ -294,6 +294,30 @@ void FLiteGPUScene::UpdateAABBData(FRDGBuilder& GraphBuilder)
 
 DECLARE_GPU_STAT(LiteGPUSceneUpdate)
 
+void FLiteGPUScene::UpdateSectionBuffers(FRDGBuilder& GraphBuilder)
+{
+	const auto SectionCount = SceneData.TotalSectionNum;
+	if (SectionCount != 0)
+	{
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), SectionCount);
+			ResizeBufferIfNeeded(GraphBuilder, CounterBufferState.RWSectionCountBuffer, Desc, TEXT("LiteGPUScene.Counters.SectionCount"));
+		}		
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), SectionCount);
+			ResizeBufferIfNeeded(GraphBuilder, CounterBufferState.RWSectionCountCopyBuffer, Desc, TEXT("LiteGPUScene.Counters.SectionCountCopy"));
+		}
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), SectionCount);
+			ResizeBufferIfNeeded(GraphBuilder, CounterBufferState.RWSectionCountOffsetBuffer, Desc, TEXT("LiteGPUScene.Counters.SectionCountOffset"));
+		}		
+		{
+			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), SectionCount);
+			ResizeBufferIfNeeded(GraphBuilder, CounterBufferState.RWNextSectionCountOffsetBuffer, Desc, TEXT("LiteGPUScene.Counters.NextSectionCountOffset"));
+		}
+	}
+}
+
 void FLiteGPUScene::UpdateViewBuffers(FRDGBuilder& GraphBuilder)
 {
 	const auto Capacity = SceneData.InstanceCapacity;
@@ -369,6 +393,7 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 	{
 		RDG_GPU_STAT_SCOPE(GraphBuilder, LiteGPUSceneUpdate);
 
+		UpdateSectionBuffers(GraphBuilder);
 		UpdateViewBuffers(GraphBuilder);
 
 		auto InstanceAttributeBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceAttributeBuffer, Capacity * sizeof(FLiteGPUInstanceAttribute), TEXT("LiteGPUScene.Attributes"));
