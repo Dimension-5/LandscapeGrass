@@ -274,8 +274,8 @@ void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View
 		{
 			FMeshBatch& MeshBatch = Collector.AllocateMesh();
 			MeshBatch.bWireframe = false;
-			MeshBatch.bUseForMaterial = true;
-			MeshBatch.bUseForDepthPass = true;
+			// MeshBatch.bUseForMaterial = true;
+			// MeshBatch.bUseForDepthPass = true;
 			MeshBatch.VertexFactory = VertexFactory;
 			MeshBatch.MaterialRenderProxy = Var.Key;
 			MeshBatch.LODIndex = 0;

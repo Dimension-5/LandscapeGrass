@@ -92,6 +92,9 @@
 #include "Shadows/ShadowScene.h"
 #include "Lumen/LumenHardwareRayTracingCommon.h"
 #include "SparseVolumeTexture/ISparseVolumeTextureStreamingManager.h"
+// ++[D5]
+#include "CompositionLighting/PostProcessLiteGPUScene.h"
+// --[D5]
 
 #if !UE_BUILD_SHIPPING
 #include "RenderCaptureInterface.h"
@@ -437,6 +440,9 @@ DECLARE_GPU_STAT(HairRendering);
 DEFINE_GPU_DRAWCALL_STAT(VirtualTextureUpdate);
 DECLARE_GPU_STAT(UploadDynamicBuffers);
 DECLARE_GPU_STAT(PostOpaqueExtensions);
+// ++[D5]
+DECLARE_GPU_STAT(UpdateLiteGPUScene);
+// --[D5]
 
 DECLARE_GPU_STAT_NAMED(NaniteVisBuffer, TEXT("Nanite VisBuffer"));
 
@@ -3822,6 +3828,18 @@ void FDeferredShadingSceneRenderer::Render(FRDGBuilder& GraphBuilder)
 			RenderVelocities(GraphBuilder, SceneTextures, EVelocityPass::Opaque, bHairStrandsEnable);
 			GraphBuilder.SetCommandListStat(GET_STATID(STAT_CLM_AfterVelocity));
 		}
+
+		// ++[D5]
+		{
+			RDG_EVENT_SCOPE(GraphBuilder, "UpdateLiteGPUScene");
+			RDG_GPU_STAT_SCOPE(GraphBuilder, UpdateLiteGPUScene);
+			for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ++ViewIndex)
+			{
+				const FViewInfo& View = Views[ViewIndex];
+				AddLiteGPUSceneCullingPass(GraphBuilder, View);
+			}
+		}
+		// --[D5]
 
 		// Pre-lighting composition lighting stage
 		// e.g. deferred decals, SSAO

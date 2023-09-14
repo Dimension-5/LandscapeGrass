@@ -15,9 +15,6 @@
 #include "RayTracing/RaytracingOptions.h"
 #include "SceneTextureParameters.h"
 #include "RenderGraphUtils.h"
-// ++[D5]
-#include "CompositionLighting/PostProcessLiteGPUScene.h"
-// --[D5]
 
 DECLARE_GPU_STAT_NAMED(CompositionBeforeBasePass, TEXT("Composition BeforeBasePass") );
 DECLARE_GPU_STAT_NAMED(CompositionPreLighting, TEXT("Composition PreLighting") );
@@ -639,12 +636,6 @@ void FCompositionLighting::ProcessAfterBasePass(FRDGBuilder& GraphBuilder, EProc
 			// DBuffer decals with emissive component
 			AddDeferredDecalPass(GraphBuilder, View, DecalPassTextures, EDecalRenderStage::Emissive);
 		}
-
-		// ++[D5]
-		{
-			AddLiteGPUSceneCullingPass(GraphBuilder, View);
-		}
-		// --[D5]
 
 		// Forward shading SSAO is applied before the base pass using only the depth buffer.
 		if (!IsForwardShadingEnabled(View.GetShaderPlatform()) && Mode != EProcessAfterBasePassMode::OnlyBeforeLightingDecals)
