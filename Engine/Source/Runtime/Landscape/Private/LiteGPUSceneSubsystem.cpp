@@ -229,6 +229,7 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 			CIDToPID.FindOrAdd(Comp).Remove(Instances[IndexOffset].IDWithinComponent);
 		}
 
+		SceneData.InstanceTransforms.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceSectorIDs.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceTypes.SetNum(SceneData.InstanceNum);
 		SceneData.InstanceSectionNums.SetNum(SceneData.InstanceNum);

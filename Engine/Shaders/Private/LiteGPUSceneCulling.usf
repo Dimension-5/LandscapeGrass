@@ -5,9 +5,34 @@ float4 Float3VectorTransform(float3 vec, float4x4 mtx)
 	return vec.x * mtx[0] + (vec.y * mtx[1] + (vec.z * mtx[2] + mtx[3]));
 }
 
+/*
+struct FLiteGPUInstanceAttribute
+{
+	uint8_t Type;
+	uint8_t SectionID;
+	uint8_t SectionNum;
+	uint8_t Padding;
+};
+*/
+
 Buffer<float4> InstanceTransformBuffer;
-Buffer<uint> InstanceTypeBuffer;
+Buffer<uint> InstanceAttributeBuffer;
 Buffer<float4> AABBBuffer;
+
+uint GetTypeID(uint InstanceID)
+{
+	return (InstanceAttributeBuffer[InstanceID] >> 24);
+}
+
+uint GetSectionID(uint InstanceID)
+{
+	return (InstanceAttributeBuffer[InstanceID] >> 16);
+}
+
+uint GetSectionNum(uint InstanceID)
+{
+	return (InstanceAttributeBuffer[InstanceID] >> 8);
+}
 
 uint NumInstances;
 
@@ -20,10 +45,10 @@ float4x4 FrustumPermutedPlanes0;
 float4x4 FrustumPermutedPlanes1;
 
 RWBuffer<int> RWUnCulledInstanceBuffer;
-RWBuffer<float> RWGPUUnCulledInstanceScreenSize;
+RWBuffer<float> RWUnCulledInstanceScreenSize;
 
-RWBuffer<uint> RWGPUUnCulledInstanceNum;
-RWBuffer<uint> RWGPUUnCulledInstanceIndirectParameters;
+RWBuffer<uint> RWUnCulledInstanceNum;
+RWBuffer<uint> RWUnCulledInstanceIndirectParameters;
 Buffer<int> UnCulledInstanceBuffer;
 
 #define THREAD_COUNT 512
@@ -39,7 +64,7 @@ SamplerState HZBSampler;
 
 // For Debugging
 RWBuffer<int> RWCulledInstanceBuffer;
-RWBuffer<uint> RWGPUCulledInstanceDebugIndirectParameters;
+RWBuffer<uint> RWCulledInstanceDebugIndirectParameters;
 
 #ifndef ENABLE_LITE_GPU_SCENE_DEBUG
 #define  ENABLE_LITE_GPU_SCENE_DEBUG 0
@@ -179,7 +204,7 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 	const uint InstanceID = DTid.x;
 	if (InstanceID < NumInstances)
 	{
-		uint InstanceType = InstanceTypeBuffer[InstanceID];
+		uint InstanceType = GetTypeID(InstanceID);
 		
 		float4 LocalAABBMin = AABBBuffer[2 * InstanceType + 0];
 		float4 LocalAABBMax = AABBBuffer[2 * InstanceType + 1];
@@ -208,11 +233,11 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 		bool bInFrustum1 = FrustumCullingInstance(FrustumPermutedPlanes1, AABBCenter, AABBExtent);
 		
 		float ScreenSize = ComputeBoundsScreenSize(AABBCenter.xyz, radius, ViewLocation, ProjMatrix);
-		RWGPUUnCulledInstanceScreenSize[InstanceID] = ScreenSize;
+		RWUnCulledInstanceScreenSize[InstanceID] = ScreenSize;
 		
 		if (bInFrustum0 && bInFrustum1)
 		{
-			if (OcclusionCullingInstance(AABBCenter+PreviewTranslation.xyz,AABBExtent))
+			if (OcclusionCullingInstance(AABBCenter + PreviewTranslation.xyz, AABBExtent))
 			{
 				const bool bInstanceUnCulled = ScreenSize > LiteGPUSceneMinScreenSize;
 #if DIM_WAVE_OPS && PLATFORM_SUPPORTS_SM6_0_WAVE_OPERATIONS
@@ -223,16 +248,16 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 					if(WaveIsFirstLane())
 					{
 #if ENABLE_LITE_GPU_SCENE_DEBUG
-						InterlockedAdd(RWGPUUnCulledInstanceIndirectParameters[1], UnCulledInstancesCount);
+						InterlockedAdd(RWUnCulledInstanceIndirectParameters[1], UnCulledInstancesCount);
 #endif
-						InterlockedAdd(RWGPUUnCulledInstanceNum[0], UnCulledInstancesCount, BaseInsertIndex);
+						InterlockedAdd(RWUnCulledInstanceNum[0], UnCulledInstancesCount, BaseInsertIndex);
 					}
 					BaseInsertIndex = WaveReadLaneFirst(BaseInsertIndex);
 
 					if (bInstanceUnCulled)
 					{
 						uint InsertIndex = BaseInsertIndex + WavePrefixCountBits(bInstanceUnCulled);
-						RWUnCulledInstanceBuffer[InsertIndex] = (int)InstanceID;
+						RWUnCulledInstanceBuffer[InsertIndex] = (int)radius;
 					}
 				}
 #else
@@ -240,17 +265,17 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 				{
 					uint InsertIndex = 0;
 #if ENABLE_LITE_GPU_SCENE_DEBUG
-					InterlockedAdd(RWGPUUnCulledInstanceIndirectParameters[1], 1u);
+					InterlockedAdd(RWUnCulledInstanceIndirectParameters[1], 1u);
 #endif
-					InterlockedAdd(RWGPUUnCulledInstanceNum[0], 1u, InsertIndex);
-                    RWUnCulledInstanceBuffer[InsertIndex] = (int)InstanceID;
-                }
+					InterlockedAdd(RWUnCulledInstanceNum[0], 1u, InsertIndex);
+					RWUnCulledInstanceBuffer[InsertIndex] = (int)radius;
+				}
 #endif
 			}
 		}
 #if ENABLE_LITE_GPU_SCENE_DEBUG
 		uint InsertIndex = 0;
-		InterlockedAdd(RWGPUCulledInstanceDebugIndirectParameters[1], 1u, InsertIndex);
+		InterlockedAdd(RWCulledInstanceDebugIndirectParameters[1], 1u, InsertIndex);
 		RWCulledInstanceBuffer[InsertIndex] = (int)InstanceID;
 #endif
 	}
@@ -267,24 +292,24 @@ void ClearGPUCullingResCS(uint3 DTid : SV_DispatchThreadID)
 		RWCulledInstanceBuffer[UniqueID] = -1;
 #endif
 		RWUnCulledInstanceBuffer[UniqueID] = -1;
-		RWGPUUnCulledInstanceScreenSize[UniqueID] = 0;
+		RWUnCulledInstanceScreenSize[UniqueID] = 0;
 	}
 	
 	if (UniqueID == 0)
 	{
-		RWGPUUnCulledInstanceNum[0] = 0;
+		RWUnCulledInstanceNum[0] = 0;
 #if ENABLE_LITE_GPU_SCENE_DEBUG
-		RWGPUUnCulledInstanceIndirectParameters[0] = 36;
-		RWGPUUnCulledInstanceIndirectParameters[1] = 0;
-		RWGPUUnCulledInstanceIndirectParameters[2] = 0;
-		RWGPUUnCulledInstanceIndirectParameters[3] = 0;
-		RWGPUUnCulledInstanceIndirectParameters[4] = 0;
+		RWUnCulledInstanceIndirectParameters[0] = 36;
+		RWUnCulledInstanceIndirectParameters[1] = 0;
+		RWUnCulledInstanceIndirectParameters[2] = 0;
+		RWUnCulledInstanceIndirectParameters[3] = 0;
+		RWUnCulledInstanceIndirectParameters[4] = 0;
 		
-		RWGPUCulledInstanceDebugIndirectParameters[0] = 36;
-		RWGPUCulledInstanceDebugIndirectParameters[1] = 0;
-		RWGPUCulledInstanceDebugIndirectParameters[2] = 0;
-		RWGPUCulledInstanceDebugIndirectParameters[3] = 0;
-		RWGPUCulledInstanceDebugIndirectParameters[4] = 0;
+		RWCulledInstanceDebugIndirectParameters[0] = 36;
+		RWCulledInstanceDebugIndirectParameters[1] = 0;
+		RWCulledInstanceDebugIndirectParameters[2] = 0;
+		RWCulledInstanceDebugIndirectParameters[3] = 0;
+		RWCulledInstanceDebugIndirectParameters[4] = 0;
 #endif	
 	}
 }
@@ -317,7 +342,7 @@ void DebugLiteGPUSceneVS(in FDebugVertexInput VSIn,
 {
 	//int InstanceIndex = VSIn.InstanceId;
 	int InstanceIndex = CulledLeafInstanceBuffer[VSIn.InstanceId];
-	uint InstanceType = InstanceTypeBuffer[InstanceIndex];
+	uint InstanceType = GetTypeID(InstanceID);
 		
 	float4 LocalAABBMin = AABBBuffer[2 * InstanceType + 0];
 	float4 LocalAABBMax = AABBBuffer[2 * InstanceType + 1];

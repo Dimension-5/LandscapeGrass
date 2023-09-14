@@ -56,8 +56,8 @@ class FClearLiteGPUSceneResCS : public FGlobalShader
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER(uint32, NumInstances)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceBuffer)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWGPUUnCulledInstanceNum)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWGPUUnCulledInstanceScreenSize)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceNum)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceScreenSize)
 	END_SHADER_PARAMETER_STRUCT()
 
 public:
@@ -94,7 +94,7 @@ class FLiteGPUSceneCullingCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, HZBTexture)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, AABBBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBuffer)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTypeBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceAttributeBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceNum)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceScreenSize)
@@ -119,19 +119,34 @@ IMPLEMENT_GLOBAL_SHADER(FLiteGPUSceneCullingCS, "/Engine/Private/LiteGPUSceneCul
 
 namespace Detail
 {
+	struct BufferBlackboard
+	{
+		FRDGBufferRef RWUnCulledInstanceScreenSize;
+		FRDGBufferRef RWUnCulledInstanceBuffer;
+		FRDGBufferRef RWUnCulledInstanceNum;
+		FRDGBufferRef RWIndirectDrawDispatchIndiretBuffer;
+		FRDGBufferRef RWInstanceIndiceBuffer;
+		FRDGBufferRef RWIndirectDrawBuffer;
+		FRDGBufferRef RWUnCulledInstanceIndirectParameters;
+
+		FRDGBufferRef MeshAABBBuffer;
+		FRDGBufferRef InstanceAttributeBuffer;
+		FRDGBufferRef InstanceTransformBuffer;
+	};
+
 	void Clear(FRDGBuilder& GraphBuilder
 		, const FViewInfo& View
-		, class FLiteGPUSceneProxy* CullingProxy)
+		, class FLiteGPUSceneProxy* CullingProxy
+		, const BufferBlackboard& Buffers)
 	{
 		const auto InstanceNum = CullingProxy->Scene->GetInstanceNum();
 
 		// FILL PARAMETERS
-		auto ViewBufferState = CullingProxy->Scene->GetViewBufferState();
 		auto ClearParameters = GraphBuilder.AllocParameters<FClearLiteGPUSceneResCS::FParameters>();
 		ClearParameters->NumInstances = InstanceNum;
-		ClearParameters->RWUnCulledInstanceBuffer = GraphBuilder.CreateUAV(ViewBufferState.UnCulledInstanceBuffer);
-		ClearParameters->RWGPUUnCulledInstanceScreenSize = GraphBuilder.CreateUAV(ViewBufferState.UnCulledInstanceScreenSize);
-		ClearParameters->RWGPUUnCulledInstanceNum = GraphBuilder.CreateUAV(ViewBufferState.UnCulledInstanceNum);
+		ClearParameters->RWUnCulledInstanceBuffer = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceBuffer, PF_R32_SINT);
+		ClearParameters->RWUnCulledInstanceScreenSize = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+		ClearParameters->RWUnCulledInstanceNum = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceNum, PF_R32_UINT);
 
 		// GET COMPUTE SHADER
 		const auto& ShaderMap = GetGlobalShaderMap(View.FeatureLevel);
@@ -151,15 +166,14 @@ namespace Detail
 
 	void Cull(FRDGBuilder& GraphBuilder
 		, const FViewInfo& View
-		, class FLiteGPUSceneProxy* CullingProxy)
+		, class FLiteGPUSceneProxy* CullingProxy
+		, const BufferBlackboard& Buffers)
 	{
 		const auto InstanceNum = CullingProxy->Scene->GetInstanceNum();
 		FVector3f PreviewTranslationVector = FVector3f(View.ViewMatrices.GetPreViewTranslation());
 		FVector3f ViewLoc = FVector3f(View.ViewMatrices.GetViewOrigin());
 
 		// FILL PARAMETERS
-		auto ViewBufferState = CullingProxy->Scene->GetViewBufferState();
-		auto SceneBufferState = CullingProxy->Scene->GetSceneBufferState();
 		auto CullParameters = GraphBuilder.AllocParameters<FLiteGPUSceneCullingCS::FParameters>();
 		CullParameters->NumInstances = InstanceNum;
 		CullParameters->ViewLocation = ViewLoc;
@@ -208,12 +222,12 @@ namespace Detail
 			CullParameters->HZBSampler = TStaticSamplerState<SF_Point, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 			CullParameters->HZBTexture = View.HZB;
 		}
-		CullParameters->RWUnCulledInstanceBuffer = GraphBuilder.CreateUAV(ViewBufferState.UnCulledInstanceBuffer);
-		CullParameters->RWUnCulledInstanceScreenSize = GraphBuilder.CreateUAV(ViewBufferState.UnCulledInstanceScreenSize);
-		CullParameters->RWUnCulledInstanceNum = GraphBuilder.CreateUAV(ViewBufferState.UnCulledInstanceNum);
-		CullParameters->AABBBuffer = GraphBuilder.CreateSRV(SceneBufferState.MeshAABBBuffer);
-		CullParameters->InstanceTypeBuffer = GraphBuilder.CreateSRV(SceneBufferState.InstanceAttributeBuffer);
-		CullParameters->InstanceTransformBuffer = GraphBuilder.CreateSRV(SceneBufferState.InstanceTransformBuffer);
+		CullParameters->RWUnCulledInstanceBuffer = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceBuffer, PF_R32_SINT);
+		CullParameters->RWUnCulledInstanceScreenSize = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+		CullParameters->RWUnCulledInstanceNum = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceNum, PF_R32_UINT);
+		CullParameters->AABBBuffer = GraphBuilder.CreateSRV(Buffers.MeshAABBBuffer, PF_R32G32B32F);
+		CullParameters->InstanceAttributeBuffer = GraphBuilder.CreateSRV(Buffers.InstanceAttributeBuffer, PF_R32_UINT);
+		CullParameters->InstanceTransformBuffer = GraphBuilder.CreateSRV(Buffers.InstanceTransformBuffer, PF_R32G32B32F);
 
 		// GET COMPUTE SHADER
 		FLiteGPUSceneCullingCS::FPermutationDomain PermutationVector;
@@ -236,14 +250,16 @@ namespace Detail
 
 	void DepthDrawTest(FRDGBuilder& GraphBuilder
 		, const FViewInfo& View
-		, class FLiteGPUSceneProxy* CullingProxy)
+		, class FLiteGPUSceneProxy* CullingProxy
+		, const BufferBlackboard& Buffers)
 	{
 		// TODO
 	}
 
 	void Debug(FRDGBuilder& GraphBuilder
 		, const FViewInfo& View
-		, class FLiteGPUSceneProxy* CullingProxy)
+		, class FLiteGPUSceneProxy* CullingProxy
+		, const BufferBlackboard& Buffers)
 	{
 		// TODO
 	}
@@ -265,14 +281,30 @@ void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View
 
 	const FSceneViewFamily& ViewFamily = *(View.Family);
 	FScene& Scene = *(FScene*)ViewFamily.Scene;
+	
 	for (auto Proxy : Scene.CachedLiteGPUScene)
 	{
+		auto ViewBufferState = Proxy->Scene->GetViewBufferState();
+		auto SceneBufferState = Proxy->Scene->GetSceneBufferState();
+		Detail::BufferBlackboard Buffers;
+		Buffers.RWUnCulledInstanceScreenSize = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWUnCulledInstanceScreenSize);
+		Buffers.RWUnCulledInstanceBuffer = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWUnCulledInstanceBuffer);
+		Buffers.RWUnCulledInstanceNum = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWUnCulledInstanceNum);
+		Buffers.RWIndirectDrawDispatchIndiretBuffer = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWIndirectDrawDispatchIndiretBuffer);
+		Buffers.RWInstanceIndiceBuffer = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWInstanceIndiceBuffer);
+		Buffers.RWIndirectDrawBuffer = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWIndirectDrawBuffer);
+		Buffers.RWUnCulledInstanceIndirectParameters = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWUnCulledInstanceIndirectParameters);
+		
+		Buffers.MeshAABBBuffer = GraphBuilder.RegisterExternalBuffer(SceneBufferState.MeshAABBBuffer);
+		Buffers.InstanceAttributeBuffer = GraphBuilder.RegisterExternalBuffer(SceneBufferState.InstanceAttributeBuffer);
+		Buffers.InstanceTransformBuffer = GraphBuilder.RegisterExternalBuffer(SceneBufferState.InstanceTransformBuffer);
+
 		if (Proxy && Proxy->IsInitialized())
 		{
-			Detail::Clear(GraphBuilder, View, Proxy);
-			Detail::Cull(GraphBuilder, View, Proxy);
-			Detail::DepthDrawTest(GraphBuilder, View, Proxy);
-			Detail::Debug(GraphBuilder, View, Proxy);
+			Detail::Clear(GraphBuilder, View, Proxy, Buffers);
+			Detail::Cull(GraphBuilder, View, Proxy, Buffers);
+			Detail::DepthDrawTest(GraphBuilder, View, Proxy, Buffers);
+			Detail::Debug(GraphBuilder, View, Proxy, Buffers);
 		}
 	}
 }

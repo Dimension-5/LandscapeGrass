@@ -102,6 +102,7 @@ public:
 	TSharedPtr<FLiteGPUScene> Scene = nullptr;
 	FLiteGPUSceneVertexFactory* pGPUDrivenVertexFactory = nullptr;
 	FLiteGPUSceneVertexFactoryUserData* pVFUserData = nullptr;
+	FSceneInterface* CachedSceneInterface = nullptr;
 	TMap<FMaterialRenderProxy*, TArray<int32>> MaterialToSectionIDsMap;
 	TArray<FLiteGPUSceneMeshSectionInfo> AllSections;
 };

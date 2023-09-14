@@ -160,10 +160,12 @@ FLiteGPUSceneProxy::FLiteGPUSceneProxy(ULiteGPUSceneRenderComponent* Component, 
 
 	FLiteGPUSceneProxy* pLiteGPUSceneProxy = this;
 	FSceneInterface* SceneInterface = Component->GetWorld()->Scene;
+	CachedSceneInterface = SceneInterface;
 	ENQUEUE_RENDER_COMMAND(InitLiteGPUProxy)(
 		[pLiteGPUSceneProxy, SceneInterface](FRHICommandList& RHICmdList)
 		{
 			pLiteGPUSceneProxy->Init_RenderingThread();
+			SceneInterface->AddOrRemoveLiteGPUSceneProxy_RenderingThread(pLiteGPUSceneProxy, true);
 		}
 	);
 	BeginInitResource(pGPUDrivenVertexFactory);
@@ -173,6 +175,11 @@ FLiteGPUSceneProxy::~FLiteGPUSceneProxy()
 {
 	if (IsInRenderingThread())
 	{
+		if (CachedSceneInterface)
+		{
+			CachedSceneInterface->AddOrRemoveLiteGPUSceneProxy_RenderingThread(this, false);
+		}
+
 		if (nullptr != pGPUDrivenVertexFactory)
 		{
 			pGPUDrivenVertexFactory->ReleaseResource();
@@ -289,7 +296,7 @@ void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View
 		BatchElement.UserIndex = 0;
 		BatchElement.NumInstances = 1;
 
-		BatchElement.IndirectArgsBuffer = Scene->ViewBufferState.IndirectDrawBuffer->GetRHI();
+		BatchElement.IndirectArgsBuffer = Scene->ViewBufferState.RWIndirectDrawBuffer->GetRHI();
 		BatchElement.IndirectArgsOffset = IndirectDrawOffset * sizeof(LiteGPUSceneIndirectArguments);
 
 		BatchElement.FirstInstance = 0;

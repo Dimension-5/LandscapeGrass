@@ -189,27 +189,25 @@ struct FLiteGPUSceneData
 
 struct FLiteGPUViewBufferState
 {
-	FRDGBuffer* IndirectDrawDispatchIndiretBuffer;
-	FRDGBuffer* InstanceIndiceBuffer;
-	FRDGBuffer* IndirectDrawBuffer;
-	FRDGBuffer* UnCulledInstanceBuffer;
-	FRDGBuffer* UnCulledInstanceScreenSize;
-	FRDGBuffer* UnCulledInstanceNum;
-	FRDGBuffer* UnCulledInstanceIndirectParameters;
+	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceScreenSize;
+	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceNum;
+	TRefCountPtr<FRDGPooledBuffer> RWIndirectDrawDispatchIndiretBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWInstanceIndiceBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWIndirectDrawBuffer;
+	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceIndirectParameters;
 };
 
 struct FLiteGPUSceneBufferState
 {
-	FRDGBuffer* SectionInfoBuffer = nullptr;
-	FRDGBuffer* MeshAABBBuffer = nullptr;
+	TRefCountPtr<FRDGPooledBuffer> SectionInfoBuffer;
+	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
+	TRefCountPtr<FRDGPooledBuffer> SectorInfoBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceAttributeBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBuffer;
+	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
 
-	FRDGBuffer* SectorInfoBuffer = nullptr;
-	FRDGBufferSRV* SectorInfoBufferSRV = nullptr;
-	
-	FRDGBuffer* InstanceAttributeBuffer = nullptr;
-	FRDGBuffer* InstanceTransformBuffer = nullptr;
 	FRDGBufferSRV* InstanceTransformBufferSRV = nullptr;
-	FRDGBuffer* InstanceSectorIDBuffer = nullptr;
 	FRDGBufferSRV* InstanceSectorIDBufferSRV = nullptr;
 };
 
@@ -254,30 +252,13 @@ protected:
 	FCriticalSection SceneUpdatesMutex;
 
 	FLiteGPUCombinedBuffer CombinedBuffer;
-	TRefCountPtr<FRDGPooledBuffer> SectionInfoBuffer;
-	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
 
 	FRDGAsyncScatterUploadBuffer SectionInfoUploadBuffer;
 	FRDGAsyncScatterUploadBuffer MeshAABBUploadBuffer;
-
-	// TRefCountPtr<FRDGPooledBuffer> InstanceIndicesBuffer;
-	TRefCountPtr<FRDGPooledBuffer> SectorInfoBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceAttributeBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
-
 	FRDGAsyncScatterUploadBuffer SectorInfoUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceAttributeUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceTransformUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceSectorIDUploadBuffer;
-
-	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceScreenSize;
-	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceBuffer;
-	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceNum;
-	TRefCountPtr<FRDGPooledBuffer> RWIndirectDrawDispatchIndiretBuffer;
-	TRefCountPtr<FRDGPooledBuffer> RWInstanceIndiceBuffer;
-	TRefCountPtr<FRDGPooledBuffer> RWIndirectDrawBuffer;
-	TRefCountPtr<FRDGPooledBuffer> RWUnCulledInstanceIndirectParameters;
 
 	FLiteGPUViewBufferState ViewBufferState;
 	FLiteGPUSceneBufferState BufferState;
