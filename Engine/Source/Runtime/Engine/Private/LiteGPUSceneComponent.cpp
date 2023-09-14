@@ -232,7 +232,7 @@ void FLiteGPUSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>&
 			{
 				return;
 			}
-			if (Scene->BufferState.InstanceTransformBufferSRV != nullptr)
+			if (Scene->BufferState.InstanceTransformBuffer != nullptr)
 			{
 				// DispatchCulling();
 				// GenerateDrawcalls();
