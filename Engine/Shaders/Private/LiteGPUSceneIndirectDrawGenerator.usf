@@ -185,7 +185,7 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 Buffer<uint> SectionCountCopyBuffer;
 
 [numthreads(THREAD_COUNT, 1, 1)]
-void ComputeInstanceSectionOffsetCS(uint3 DTid : SV_DispatchThreadID)
+void GenerateDrawArgumentsCS(uint3 DTid : SV_DispatchThreadID)
 {
 	const uint UniqueID = DTid.x;
 	if (UniqueID < AllSectionNum)

@@ -257,10 +257,10 @@ public:
 };
 IMPLEMENT_GLOBAL_SHADER(FGenerateInstanceIndiceCS, "/Engine/Private/LiteGPUSceneIndirectDrawGenerator.usf", "GenerateInstanceIndiceCS", SF_Compute);
 
-class FComputeInstanceSectionOffsetCS : public FGlobalShader
+class FGenerateDrawArgumentsCS : public FGlobalShader
 {
-	DECLARE_GLOBAL_SHADER(FComputeInstanceSectionOffsetCS);
-	SHADER_USE_PARAMETER_STRUCT(FComputeInstanceSectionOffsetCS, FGlobalShader);
+	DECLARE_GLOBAL_SHADER(FGenerateDrawArgumentsCS);
+	SHADER_USE_PARAMETER_STRUCT(FGenerateDrawArgumentsCS, FGlobalShader);
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER(uint32, AllSectionNum)
@@ -280,7 +280,7 @@ public:
 		// OutEnvironment.SetDefine(TEXT("ENABLE_LITE_GPU_SCENE_DEBUG"), ENABLE_LITE_GPU_SCENE_DEBUG);
 	}
 };
-IMPLEMENT_GLOBAL_SHADER(FComputeInstanceSectionOffsetCS, "/Engine/Private/LiteGPUSceneIndirectDrawGenerator.usf", "ComputeInstanceSectionOffsetCS", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FGenerateDrawArgumentsCS, "/Engine/Private/LiteGPUSceneIndirectDrawGenerator.usf", "GenerateDrawArgumentsCS", SF_Compute);
 
 namespace LiteGPUScene::Detail
 {
@@ -506,10 +506,10 @@ namespace LiteGPUScene::Detail
 				Buffers.RWIndirectDrawDispatchIndiretBuffer, 0
 			);
 		}
-		// 3 COMPUTE SECTION OFFSETS
+		// 3 GENERATE ARGUMENTS
 		{
 			// FILL PARAMETERS
-			auto Parameters = GraphBuilder.AllocParameters<FComputeInstanceSectionOffsetCS::FParameters>();
+			auto Parameters = GraphBuilder.AllocParameters<FGenerateDrawArgumentsCS::FParameters>();
 			Parameters->AllSectionNum = AllSectionNum;
 			Parameters->AllSectionInfoBuffer = GraphBuilder.CreateSRV(Buffers.SectionInfoBuffer, PF_A32B32G32R32F);
 			Parameters->SectionCountCopyBuffer = GraphBuilder.CreateSRV(Buffers.RWSectionCountCopyBuffer, PF_R32_UINT);
@@ -520,13 +520,13 @@ namespace LiteGPUScene::Detail
 
 			// GET COMPUTE SHADER
 			const auto& ShaderMap = GetGlobalShaderMap(View.FeatureLevel);
-			TShaderMapRef<FComputeInstanceSectionOffsetCS> OffsetShader(ShaderMap);
+			TShaderMapRef<FGenerateDrawArgumentsCS> OffsetShader(ShaderMap);
 
 			// CALCULATE AND DISPATCH
 			const auto NumThreadGroups = FMath::DivideAndRoundUp<uint32>(AllSectionNum, LITE_GPU_SCENE_COMPUTE_THREAD_NUM);
 			FComputeShaderUtils::AddPass(
 				GraphBuilder,
-				RDG_EVENT_NAME("LiteGPUScene::ComputeInstanceSectionOffset"),
+				RDG_EVENT_NAME("LiteGPUScene::GenerateArguments"),
 				ERDGPassFlags::Compute,
 				OffsetShader,
 				Parameters,
@@ -569,7 +569,7 @@ namespace LiteGPUScene::Detail
 			// CALCULATE AND DISPATCH
 			FComputeShaderUtils::AddPass(
 				GraphBuilder,
-				RDG_EVENT_NAME("LiteGPUScene::GenArgs"),
+				RDG_EVENT_NAME("LiteGPUScene::GenerateIndices"),
 				ERDGPassFlags::Compute,
 				DrawGenShader,
 				Parameters,

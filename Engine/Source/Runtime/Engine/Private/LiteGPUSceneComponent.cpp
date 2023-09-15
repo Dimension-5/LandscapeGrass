@@ -274,17 +274,15 @@ void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View
 		for (const auto& Var : MaterialToSectionIDsMap)
 		{
 			FMeshBatch& MeshBatch = Collector.AllocateMesh();
-			MeshBatch.bWireframe = false;
-			// MeshBatch.bUseForMaterial = true;
-			// MeshBatch.bUseForDepthPass = true;
-			MeshBatch.VertexFactory = VertexFactory;
-			MeshBatch.MaterialRenderProxy = Var.Key;
 			MeshBatch.LODIndex = 0;
-			MeshBatch.Type = PT_TriangleList;
-			MeshBatch.DepthPriorityGroup = SDPG_World;
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 			MeshBatch.VisualizeHLODIndex = 0;
 #endif
+			MeshBatch.bWireframe = false;
+			MeshBatch.VertexFactory = VertexFactory;
+			MeshBatch.MaterialRenderProxy = Var.Key;
+			MeshBatch.Type = PT_TriangleList;
+			MeshBatch.DepthPriorityGroup = SDPG_World;
 
 			FMeshBatchElement& BatchElement = MeshBatch.Elements[0];
 			BatchElement.IndexBuffer = Scene->CombinedBuffer.IndexBuffer;
