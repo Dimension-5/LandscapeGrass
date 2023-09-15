@@ -164,18 +164,16 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 				
 				if (CameraDrawDistance >= (ClosestCameraDistance) && CameraDrawDistance < (FarthestCameraDistance))
 				{
-#if Generate_Instance_Count_Pass > 0
 					// Record the number that this Section needs to be rendered after culling
 					// First we need to know the drawing offset of each type of Section
 					// So this pass runs first
 					InterlockedAdd(RWSectionCountCopyBuffer[SectionID], 1u);
-#else
+                    
 					// Now we can fill the instance id to correct position
 					uint SectionInstanceIndexStart = SectionCountOffsetBuffer[SectionID];
 					uint insert = 0;
 					InterlockedAdd(RWSectionCountBuffer[SectionID], 1u, insert);
 					RWInstanceIndiceBuffer[SectionInstanceIndexStart + insert] = (float) InstanceID;
-#endif
 				}
 			}
 		}
