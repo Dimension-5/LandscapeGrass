@@ -5,7 +5,10 @@ float4 Float3VectorTransform(float3 vec, float4x4 mtx)
 	return vec.x * mtx[0] + (vec.y * mtx[1] + (vec.z * mtx[2] + mtx[3]));
 }
 
-Buffer<float4> InstanceTransformBuffer;
+Buffer<float4> InstanceTransformBufferA;
+Buffer<float4> InstanceTransformBufferB;
+Buffer<float4> InstanceTransformBufferC;
+Buffer<float4> InstanceTransformBufferD;
 Buffer<uint> InstanceTypeBuffer;
 Buffer<float4> AABBBuffer;
 
@@ -31,10 +34,12 @@ RWBuffer<uint> RWUnCulledInstanceNum;
 RWBuffer<uint> RWUnCulledInstanceIndirectParameters;
 Buffer<int> UnCulledInstanceBuffer;
 
-#define THREAD_COUNT 512
+#ifndef THREAD_COUNT
+    #define THREAD_COUNT 512
+#endif
 
 #ifndef DIM_WAVE_OPS
-	#define  DIM_WAVE_OPS 0
+	#define DIM_WAVE_OPS 0
 #endif
 
 float4 HZBUvFactor;
@@ -47,7 +52,7 @@ RWBuffer<int> RWCulledInstanceBuffer;
 RWBuffer<uint> RWCulledInstanceDebugIndirectParameters;
 
 #ifndef ENABLE_LITE_GPU_SCENE_DEBUG
-#define  ENABLE_LITE_GPU_SCENE_DEBUG 0
+#define ENABLE_LITE_GPU_SCENE_DEBUG 0
 #endif
 
 #ifndef UpdatePass
@@ -193,10 +198,10 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 		float3 LocalAABBCenter = (LocalAABBMin.xyz + LocalAABBMax.xyz) / 2.0f;
 		float3 LocalAABBExtent = (LocalAABBMax.xyz - LocalAABBMin.xyz) / 2.0f;
 		
-		float4 InstanceTransform0 = InstanceTransformBuffer[InstanceID * 4 + 0];
-		float4 InstanceTransform1 = InstanceTransformBuffer[InstanceID * 4 + 1];
-		float4 InstanceTransform2 = InstanceTransformBuffer[InstanceID * 4 + 2];
-		float4 InstanceTransform3 = InstanceTransformBuffer[InstanceID * 4 + 3];
+		float4 InstanceTransform0 = InstanceTransformBufferA[InstanceID];
+		float4 InstanceTransform1 = InstanceTransformBufferB[InstanceID];
+		float4 InstanceTransform2 = InstanceTransformBufferC[InstanceID];
+		float4 InstanceTransform3 = InstanceTransformBufferD[InstanceID];
 		
 		float4x4 InstanceTransform = float4x4(
 			InstanceTransform0,
@@ -330,10 +335,10 @@ void DebugLiteGPUSceneVS(in FDebugVertexInput VSIn,
 	float3 LocalAABBCenter = (LocalAABBMin.xyz + LocalAABBMax.xyz) / 2.0f;
 	float3 LocalAABBExtent = (LocalAABBMax.xyz - LocalAABBMin.xyz) / 2.0f;
 		
-	float4 InstanceTransform0 = InstanceTransformBuffer[InstanceIndex * 4 + 0];
-	float4 InstanceTransform1 = InstanceTransformBuffer[InstanceIndex * 4 + 1];
-	float4 InstanceTransform2 = InstanceTransformBuffer[InstanceIndex * 4 + 2];
-	float4 InstanceTransform3 = InstanceTransformBuffer[InstanceIndex * 4 + 3];
+	float4 InstanceTransform0 = InstanceTransformBufferA[InstanceIndex];
+	float4 InstanceTransform1 = InstanceTransformBufferB[InstanceIndex];
+	float4 InstanceTransform2 = InstanceTransformBufferC[InstanceIndex];
+	float4 InstanceTransform3 = InstanceTransformBufferD[InstanceIndex];
 	
 	float4x4 InstanceTransform = float4x4(InstanceTransform0,
 	                InstanceTransform1,

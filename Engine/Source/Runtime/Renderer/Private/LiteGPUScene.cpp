@@ -405,13 +405,16 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 		auto InstanceSectionIDBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(uint32) * Capacity * SceneData.PerSectionMaxNum);
 		auto InstanceSectionIDBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.InstanceSectionIDBuffer, InstanceSectionIDBufferDesc, TEXT("LiteGPUScene.SectionIDs"));
 
-		auto SectorInfoBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(FSectorInfo) * Capacity);
+		auto SectorInfoBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(FSectorInfo) * SectorCount);
 		auto SectorInfoBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.SectorInfoBuffer, SectorInfoBufferDesc, TEXT("LiteGPUScene.SectorInfos"));
 		
 		auto InstanceSectorIDBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(uint32) * Capacity);
 		auto InstanceSectorIDBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.InstanceSectorIDBuffer, InstanceSectorIDBufferDesc, TEXT("LiteGPUScene.SectorIDs"));
 
-		auto InstanceTransformBuffer = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBuffer, Capacity * sizeof(FMatrix44f), TEXT("LiteGPUScene.Transforms"));
+		auto InstanceTransformBufferA = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBufferA, Capacity * sizeof(FVector4f), TEXT("LiteGPUScene.TransformsA"));
+		auto InstanceTransformBufferB = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBufferB, Capacity * sizeof(FVector4f), TEXT("LiteGPUScene.TransformsB"));
+		auto InstanceTransformBufferC = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBufferC, Capacity * sizeof(FVector4f), TEXT("LiteGPUScene.TransformsC"));
+		auto InstanceTransformBufferD = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBufferD, Capacity * sizeof(FVector4f), TEXT("LiteGPUScene.TransformsD"));
 		
 		FLiteGPUSceneUpdate Update;
 		{
@@ -429,12 +432,18 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 			FRDGScatterUploader* InstanceSectionIDUploader = nullptr;
 
 			FRDGScatterUploader* SectorInfoUploader = nullptr;
-			FRDGScatterUploader* InstanceTransformUploader = nullptr;
+			FRDGScatterUploader* InstanceTransformUploaderA = nullptr;
+			FRDGScatterUploader* InstanceTransformUploaderB = nullptr;
+			FRDGScatterUploader* InstanceTransformUploaderC = nullptr;
+			FRDGScatterUploader* InstanceTransformUploaderD = nullptr;
 			FRDGScatterUploader* InstanceSectorIDUploader = nullptr;
 		};
 		FTaskContext& TaskContext = *GraphBuilder.AllocObject<FTaskContext>();
 		TaskContext.SectorInfoUploader = SectorInfoUploadBuffer.Begin(GraphBuilder, SectorInfoBuffer, SectorCount, sizeof(FSectorInfo), TEXT("LiteGPUScene.Upload.SectorInfos"));
-		TaskContext.InstanceTransformUploader = InstanceTransformUploadBuffer.Begin(GraphBuilder, InstanceTransformBuffer, InstanceCount, sizeof(FMatrix44f), TEXT("LiteGPUScene.Upload.Transforms"));
+		TaskContext.InstanceTransformUploaderA = InstanceTransformUploadBufferA.Begin(GraphBuilder, InstanceTransformBufferA, InstanceCount, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.TransformsA"));
+		TaskContext.InstanceTransformUploaderB = InstanceTransformUploadBufferB.Begin(GraphBuilder, InstanceTransformBufferB, InstanceCount, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.TransformsB"));
+		TaskContext.InstanceTransformUploaderC = InstanceTransformUploadBufferC.Begin(GraphBuilder, InstanceTransformBufferC, InstanceCount, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.TransformsC"));
+		TaskContext.InstanceTransformUploaderD = InstanceTransformUploadBufferD.Begin(GraphBuilder, InstanceTransformBufferD, InstanceCount, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.TransformsD"));
 		TaskContext.InstanceSectorIDUploader = InstanceSectorIDUploadBuffer.Begin(GraphBuilder, InstanceSectorIDBuffer, InstanceCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.SectorIDs"));
 		TaskContext.InstanceTypeUploader = InstanceTypeUploadBuffer.Begin(GraphBuilder, InstanceTypeBuffer, InstanceCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.Types"));
 		TaskContext.InstanceSectionNumUploader = InstanceSectionNumUploadBuffer.Begin(GraphBuilder, InstanceSectionNumBuffer, InstanceCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.SectionNums"));
@@ -445,7 +454,10 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 				SCOPED_NAMED_EVENT(UpdateLiteGPUScene_Instances, FColor::Green);
 
 				LockIfValid(RHICmdList, TaskContext.SectorInfoUploader);
-				LockIfValid(RHICmdList, TaskContext.InstanceTransformUploader);
+				LockIfValid(RHICmdList, TaskContext.InstanceTransformUploaderA);
+				LockIfValid(RHICmdList, TaskContext.InstanceTransformUploaderB);
+				LockIfValid(RHICmdList, TaskContext.InstanceTransformUploaderC);
+				LockIfValid(RHICmdList, TaskContext.InstanceTransformUploaderD);
 				LockIfValid(RHICmdList, TaskContext.InstanceSectorIDUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceTypeUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceSectionNumUploader);
@@ -464,7 +476,11 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 
 					const auto Transform = SceneData.InstanceTransforms[Index];
 					const auto Matrix = Transform.ToMatrixWithScale();
-					TaskContext.InstanceTransformUploader->Add(Index, &Matrix);
+					const FVector4f* pMatrix = (FVector4f*)&Matrix;
+					TaskContext.InstanceTransformUploaderA->Add(Index, pMatrix);
+					TaskContext.InstanceTransformUploaderB->Add(Index, pMatrix + 1);
+					TaskContext.InstanceTransformUploaderC->Add(Index, pMatrix + 2);
+					TaskContext.InstanceTransformUploaderD->Add(Index, pMatrix + 3);
 
 					uint32 Type = SceneData.InstanceTypes[Index];
 					uint32 SectionNum = SceneData.InstanceSectionNums[Index];
@@ -481,7 +497,10 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 				}
 
 				UnlockIfValid(RHICmdList, TaskContext.SectorInfoUploader);
-				UnlockIfValid(RHICmdList, TaskContext.InstanceTransformUploader);
+				UnlockIfValid(RHICmdList, TaskContext.InstanceTransformUploaderA);
+				UnlockIfValid(RHICmdList, TaskContext.InstanceTransformUploaderB);
+				UnlockIfValid(RHICmdList, TaskContext.InstanceTransformUploaderC);
+				UnlockIfValid(RHICmdList, TaskContext.InstanceTransformUploaderD);
 				UnlockIfValid(RHICmdList, TaskContext.InstanceSectorIDUploader);
 				UnlockIfValid(RHICmdList, TaskContext.InstanceTypeUploader);
 				UnlockIfValid(RHICmdList, TaskContext.InstanceSectionNumUploader);
@@ -489,7 +508,10 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 			});
 		{
 			SectorInfoUploadBuffer.End(GraphBuilder, TaskContext.SectorInfoUploader);
-			InstanceTransformUploadBuffer.End(GraphBuilder, TaskContext.InstanceTransformUploader);
+			InstanceTransformUploadBufferA.End(GraphBuilder, TaskContext.InstanceTransformUploaderA);
+			InstanceTransformUploadBufferB.End(GraphBuilder, TaskContext.InstanceTransformUploaderB);
+			InstanceTransformUploadBufferC.End(GraphBuilder, TaskContext.InstanceTransformUploaderC);
+			InstanceTransformUploadBufferD.End(GraphBuilder, TaskContext.InstanceTransformUploaderD);
 			InstanceSectorIDUploadBuffer.End(GraphBuilder, TaskContext.InstanceSectorIDUploader);
 			InstanceTypeUploadBuffer.End(GraphBuilder, TaskContext.InstanceTypeUploader);
 			InstanceSectionNumUploadBuffer.End(GraphBuilder, TaskContext.InstanceSectionNumUploader);
@@ -497,7 +519,10 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 		}
 		{
 			SectorInfoUploadBuffer.Release();
-			InstanceTransformUploadBuffer.Release();
+			InstanceTransformUploadBufferA.Release();
+			InstanceTransformUploadBufferB.Release();
+			InstanceTransformUploadBufferC.Release();
+			InstanceTransformUploadBufferD.Release();
 			InstanceSectorIDUploadBuffer.Release();
 			InstanceTypeUploadBuffer.Release();
 			InstanceSectionNumUploadBuffer.Release();
@@ -507,7 +532,10 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 	else
 	{
 		// InstanceIndicesBuffer.SafeRelease();
-		BufferState.InstanceTransformBuffer.SafeRelease();
+		BufferState.InstanceTransformBufferA.SafeRelease();
+		BufferState.InstanceTransformBufferB.SafeRelease();
+		BufferState.InstanceTransformBufferC.SafeRelease();
+		BufferState.InstanceTransformBufferD.SafeRelease();
 		BufferState.InstanceSectorIDBuffer.SafeRelease();
 		BufferState.InstanceTypeBuffer.SafeRelease();
 		BufferState.InstanceSectionNumBuffer.SafeRelease();
