@@ -13,8 +13,6 @@
 #include "ShadowRendering.h"
 #include "Components/LiteGPUSceneComponent.h"
 
-#define LITE_GPU_SCENE_COMPUTE_THREAD_NUM 512
-
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUSceneCulling, Log, All);
 DECLARE_GPU_STAT_NAMED(LiteGPUSceneCulling, TEXT("GPUDriven LiteGPUScene Culling"));
 
@@ -172,6 +170,49 @@ public:
 };
 IMPLEMENT_GLOBAL_SHADER(FClearVisibleInstanceCS, "/Engine/Private/LiteGPUSceneIndirectDrawGenerator.usf", "ClearVisibleInstanceCS", SF_Compute);
 
+class FCountingInstanceIndiceCS : public FGlobalShader
+{
+	DECLARE_GLOBAL_SHADER(FCountingInstanceIndiceCS);
+	SHADER_USE_PARAMETER_STRUCT(FCountingInstanceIndiceCS, FGlobalShader);
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER(int32, PerSectionMaxNum)
+		SHADER_PARAMETER(FMatrix44f, ProjMatrix)
+		SHADER_PARAMETER(float, InstanceMaxScreenSize)
+		SHADER_PARAMETER(float, InstanceScreenSizeBias)
+		SHADER_PARAMETER(float, InstanceScreenSizeScale)
+		SHADER_PARAMETER(uint32, AllSectionNum)
+		SHADER_PARAMETER(FVector3f, ViewLocation)
+		SHADER_PARAMETER(FVector3f, ViewForward)
+
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, UnCulledInstanceScreenSize)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, UnCulledInstanceBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, UnCulledInstanceNum)
+
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTypeBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceSectionNumBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceSectionIDBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, AllSectionInfoBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBuffer)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, AABBSectionBuffer)
+
+		//------------------------------------//
+
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWSectionCountCopyBuffer)
+	END_SHADER_PARAMETER_STRUCT()
+
+public:
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters) { return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5); }
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+		OutEnvironment.SetDefine(TEXT("THREAD_COUNT"), LITE_GPU_SCENE_COMPUTE_THREAD_NUM);
+		OutEnvironment.SetDefine(TEXT("Generate_Instance_Count_Pass"), LITE_GPU_SCENE_COMPUTE_THREAD_NUM);
+		// OutEnvironment.SetDefine(TEXT("ENABLE_LITE_GPU_SCENE_DEBUG"), ENABLE_LITE_GPU_SCENE_DEBUG);
+	}
+};
+IMPLEMENT_GLOBAL_SHADER(FCountingInstanceIndiceCS, "/Engine/Private/LiteGPUSceneIndirectDrawGenerator.usf", "GenerateInstanceIndiceCS", SF_Compute);
+
 class FGenerateInstanceIndiceCS : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FGenerateInstanceIndiceCS);
@@ -202,7 +243,6 @@ class FGenerateInstanceIndiceCS : public FGlobalShader
 
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, SectionCountOffsetBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWSectionCountBuffer)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWSectionCountCopyBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWInstanceIndiceBuffer)
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -425,10 +465,10 @@ namespace LiteGPUScene::Detail
 				FIntVector(NumThreadGroups, 1, 1)
 			);
 		}
-		// 2 GENERATE INDICES
+		// 2 COUNT INDICES
 		{
 			// FILL PARAMETERS
-			auto Parameters = GraphBuilder.AllocParameters<FGenerateInstanceIndiceCS::FParameters>();
+			auto Parameters = GraphBuilder.AllocParameters<FCountingInstanceIndiceCS::FParameters>();
 			Parameters->PerSectionMaxNum = CullingProxy->Scene->GetPerSectionMaxNum();
 			Parameters->ProjMatrix = FMatrix44f(View.ViewMatrices.GetProjectionMatrix());
 			Parameters->ViewLocation = FVector3f(View.ViewMatrices.GetViewOrigin());
@@ -441,7 +481,7 @@ namespace LiteGPUScene::Detail
 			Parameters->UnCulledInstanceScreenSize = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
 			Parameters->UnCulledInstanceBuffer = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceBuffer, PF_R32_UINT);
 			Parameters->UnCulledInstanceNum = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceNum, PF_R32_UINT);
-
+			
 			Parameters->InstanceTypeBuffer = GraphBuilder.CreateSRV(Buffers.InstanceTypeBuffer, PF_R32_UINT);
 			Parameters->InstanceSectionNumBuffer = GraphBuilder.CreateSRV(Buffers.InstanceSectionNumBuffer, PF_R32_UINT);
 			Parameters->InstanceSectionIDBuffer = GraphBuilder.CreateSRV(Buffers.InstanceSectionIDBuffer, PF_R32_UINT);
@@ -449,22 +489,19 @@ namespace LiteGPUScene::Detail
 			Parameters->AllSectionInfoBuffer = GraphBuilder.CreateSRV(Buffers.SectionInfoBuffer, PF_A32B32G32R32F);
 			Parameters->InstanceTransformBuffer = GraphBuilder.CreateSRV(Buffers.InstanceTransformBuffer, PF_A32B32G32R32F);
 			Parameters->AABBSectionBuffer = GraphBuilder.CreateSRV(Buffers.MeshAABBBuffer, PF_A32B32G32R32F);
-
-			Parameters->SectionCountOffsetBuffer = GraphBuilder.CreateSRV(Buffers.RWSectionCountOffsetBuffer, PF_R32_UINT);
-			Parameters->RWSectionCountBuffer = GraphBuilder.CreateUAV(Buffers.RWSectionCountBuffer, PF_R32_UINT);
-			Parameters->RWInstanceIndiceBuffer = GraphBuilder.CreateUAV(Buffers.RWInstanceIndiceBuffer, PF_R32_FLOAT);
+			
 			Parameters->RWSectionCountCopyBuffer = GraphBuilder.CreateUAV(Buffers.RWSectionCountCopyBuffer, PF_R32_UINT);
 
 			// GET COMPUTE SHADER
 			const auto& ShaderMap = GetGlobalShaderMap(View.FeatureLevel);
-			TShaderMapRef<FGenerateInstanceIndiceCS> DrawGenShader(ShaderMap);
+			TShaderMapRef<FCountingInstanceIndiceCS> CountShader(ShaderMap);
 
 			// CALCULATE AND DISPATCH
 			FComputeShaderUtils::AddPass(
 				GraphBuilder,
-				RDG_EVENT_NAME("LiteGPUScene::GenerateIndices"),
+				RDG_EVENT_NAME("LiteGPUScene::CountIndices"),
 				ERDGPassFlags::Compute,
-				DrawGenShader,
+				CountShader,
 				Parameters,
 				Buffers.RWIndirectDrawDispatchIndiretBuffer, 0
 			);
@@ -494,6 +531,49 @@ namespace LiteGPUScene::Detail
 				OffsetShader,
 				Parameters,
 				FIntVector(NumThreadGroups, 1, 1)
+			);
+		}
+		// 4 GENERATE INDICES
+		{
+			// FILL PARAMETERS
+			auto Parameters = GraphBuilder.AllocParameters<FGenerateInstanceIndiceCS::FParameters>();
+			Parameters->PerSectionMaxNum = CullingProxy->Scene->GetPerSectionMaxNum();
+			Parameters->ProjMatrix = FMatrix44f(View.ViewMatrices.GetProjectionMatrix());
+			Parameters->ViewLocation = FVector3f(View.ViewMatrices.GetViewOrigin());
+			Parameters->ViewForward = FVector3f(View.GetViewDirection());
+			Parameters->InstanceScreenSizeBias = sLiteGPUSceneScreenSizeBias;
+			Parameters->InstanceScreenSizeScale = sLiteGPUSceneLODDistanceScale * View.LODDistanceFactor;
+			Parameters->InstanceMaxScreenSize = sLiteGPUSceneMaxScreenSize;
+			Parameters->AllSectionNum = AllSectionNum;
+
+			Parameters->UnCulledInstanceScreenSize = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+			Parameters->UnCulledInstanceBuffer = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceBuffer, PF_R32_UINT);
+			Parameters->UnCulledInstanceNum = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceNum, PF_R32_UINT);
+
+			Parameters->InstanceTypeBuffer = GraphBuilder.CreateSRV(Buffers.InstanceTypeBuffer, PF_R32_UINT);
+			Parameters->InstanceSectionNumBuffer = GraphBuilder.CreateSRV(Buffers.InstanceSectionNumBuffer, PF_R32_UINT);
+			Parameters->InstanceSectionIDBuffer = GraphBuilder.CreateSRV(Buffers.InstanceSectionIDBuffer, PF_R32_UINT);
+
+			Parameters->AllSectionInfoBuffer = GraphBuilder.CreateSRV(Buffers.SectionInfoBuffer, PF_A32B32G32R32F);
+			Parameters->InstanceTransformBuffer = GraphBuilder.CreateSRV(Buffers.InstanceTransformBuffer, PF_A32B32G32R32F);
+			Parameters->AABBSectionBuffer = GraphBuilder.CreateSRV(Buffers.MeshAABBBuffer, PF_A32B32G32R32F);
+
+			Parameters->SectionCountOffsetBuffer = GraphBuilder.CreateSRV(Buffers.RWSectionCountOffsetBuffer, PF_R32_UINT);
+			Parameters->RWSectionCountBuffer = GraphBuilder.CreateUAV(Buffers.RWSectionCountBuffer, PF_R32_UINT);
+			Parameters->RWInstanceIndiceBuffer = GraphBuilder.CreateUAV(Buffers.RWInstanceIndiceBuffer, PF_R32_FLOAT);
+
+			// GET COMPUTE SHADER
+			const auto& ShaderMap = GetGlobalShaderMap(View.FeatureLevel);
+			TShaderMapRef<FGenerateInstanceIndiceCS> DrawGenShader(ShaderMap);
+
+			// CALCULATE AND DISPATCH
+			FComputeShaderUtils::AddPass(
+				GraphBuilder,
+				RDG_EVENT_NAME("LiteGPUScene::GenerateIndices"),
+				ERDGPassFlags::Compute,
+				DrawGenShader,
+				Parameters,
+				Buffers.RWIndirectDrawDispatchIndiretBuffer, 0
 			);
 		}
 	}
