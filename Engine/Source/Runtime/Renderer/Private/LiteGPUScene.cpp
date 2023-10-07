@@ -326,26 +326,28 @@ void FLiteGPUScene::UpdateViewBuffers(FRDGBuilder& GraphBuilder)
 		// VIEW BUFFERS
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(float), Capacity);
-			// Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			auto UnCulledInstanceScreenSize = ResizeBufferIfNeeded(GraphBuilder, ViewBufferState.RWUnCulledInstanceScreenSize, Desc, TEXT("LiteGPUScene.View.ScreenSizes"));
 		}
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity);
-			// Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			auto UnCulledInstanceBuffer = ResizeBufferIfNeeded(GraphBuilder, ViewBufferState.RWUnCulledInstanceBuffer, Desc, TEXT("LiteGPUScene.View.UnCulledInstances"));
 		}
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 1);
-			// Desc.Usage |= EBufferUsageFlags::DrawIndirect;
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			auto UnCulledInstanceNum = ResizeBufferIfNeeded(GraphBuilder, ViewBufferState.RWUnCulledInstanceNum, Desc, TEXT("LiteGPUScene.View.UnCulledInstanceNum"));
 		}
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 3);
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			Desc.Usage |= EBufferUsageFlags::DrawIndirect;
 			auto IndirectDrawDispatchIndiretBuffer = ResizeBufferIfNeeded(GraphBuilder, ViewBufferState.RWIndirectDrawDispatchIndiretBuffer, Desc, TEXT("LiteGPUScene.View.DrawDispatchIndirectBuffer"));
 		}
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(float), Capacity * SceneData.PerSectionMaxNum);
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			Desc.Usage |= EBufferUsageFlags::VertexBuffer;
 			auto InstanceIndiceBuffer = ResizeBufferIfNeeded(GraphBuilder, ViewBufferState.RWInstanceIndiceBuffer, Desc, TEXT("LiteGPUScene.View.DrawIndices"));
 		
@@ -367,11 +369,13 @@ void FLiteGPUScene::UpdateViewBuffers(FRDGBuilder& GraphBuilder)
 		}
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 5 * SceneData.TotalSectionNum);
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			Desc.Usage |= EBufferUsageFlags::DrawIndirect;
 			auto IndirectDrawBuffer = ResizeBufferIfNeeded(GraphBuilder, ViewBufferState.RWIndirectDrawBuffer, Desc, TEXT("LiteGPUScene.View.IndirectDrawBuffer"));
 		}
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 5);
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			Desc.Usage |= EBufferUsageFlags::DrawIndirect;
 			auto UnCulledInstanceIndirectParameters = ResizeBufferIfNeeded(GraphBuilder, ViewBufferState.RWUnCulledInstanceIndirectParameters, Desc, TEXT("LiteGPUScene.View.UnCulledInstanceIndirectParameters"));
 		}
@@ -397,18 +401,23 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 		UpdateViewBuffers(GraphBuilder);
 
 		auto InstanceTypeBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(uint32) *  Capacity);
+		InstanceTypeBufferDesc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 		auto InstanceTypeBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.InstanceTypeBuffer, InstanceTypeBufferDesc, TEXT("LiteGPUScene.Types"));
 		
 		auto InstanceSectionNumBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(uint32) * Capacity);
+		InstanceSectionNumBufferDesc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 		auto InstanceSectionNumBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.InstanceSectionNumBuffer, InstanceSectionNumBufferDesc, TEXT("LiteGPUScene.SectionNums"));
 		
 		auto InstanceSectionIDBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(uint32) * Capacity * SceneData.PerSectionMaxNum);
+		InstanceSectionIDBufferDesc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 		auto InstanceSectionIDBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.InstanceSectionIDBuffer, InstanceSectionIDBufferDesc, TEXT("LiteGPUScene.SectionIDs"));
 
 		auto SectorInfoBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(FSectorInfo) * SectorCount);
+		SectorInfoBufferDesc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 		auto SectorInfoBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.SectorInfoBuffer, SectorInfoBufferDesc, TEXT("LiteGPUScene.SectorInfos"));
 		
 		auto InstanceSectorIDBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(uint32) * Capacity);
+		InstanceSectorIDBufferDesc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 		auto InstanceSectorIDBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.InstanceSectorIDBuffer, InstanceSectorIDBufferDesc, TEXT("LiteGPUScene.SectorIDs"));
 
 		auto InstanceTransformBufferA = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBufferA, Capacity * sizeof(FVector4f), TEXT("LiteGPUScene.TransformsA"));

@@ -3179,10 +3179,6 @@ public:
 
 	FSpanAllocator PersistentPrimitiveIdAllocator;
 
-	//++[D5]
-	class FLiteGPUSceneBufferManager* pLiteGPUSceneBufferManager = nullptr;
-	//--[D5]
-
 #if WITH_EDITOR
 	/** Editor Pixel inspector */
 	FPixelInspectorData PixelInspectorData;
