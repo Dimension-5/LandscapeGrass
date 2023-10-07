@@ -97,6 +97,8 @@ void FLiteGPUScene::buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllS
 {
 	CombinedData.Materials.Empty();
 	CombinedData.SectionsMap.Empty();
+	CombinedData.Vertices.Empty();
+	CombinedData.Indices.Empty();
 
 	for (int32 MeshIndex = 0; MeshIndex < AllSourceMeshes.Num(); MeshIndex++)
 	{
@@ -158,11 +160,13 @@ void FLiteGPUScene::buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllS
 void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
 {
 	SceneData.SourceMeshes = AllSourceMeshes;
+	SceneData.SectionInfos.Empty();
+	SceneData.PerSectionMaxNum = 0;
 	for (auto& [K, V] : CombinedData.SectionsMap)
 	{
 		for (auto& Section : V)
 		{
-			Section.PatchID = SceneData.SectionInfos.Num();
+			Section.SectionID = SceneData.SectionInfos.Num();
 			SceneData.SectionInfos.Add(Section);
 		}
 	}
@@ -231,7 +235,7 @@ void FLiteGPUScene::UpdateSectionInfos(FRDGBuilder& GraphBuilder)
 		}
 		FResizeResourceSOAParams ResizeParams;
 		ResizeParams.NumBytes = SceneData.TotalSectionNum * 2 * sizeof(FVector4f);
-		ResizeParams.NumArrays = SceneData.TotalSectionNum * 2;
+		ResizeParams.NumArrays = 2;
 		auto SectionInfoBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, BufferState.SectionInfoBuffer, ResizeParams, TEXT("LiteGPUScene.SectionInfos"));
 	
 		struct FTaskContext
@@ -266,7 +270,7 @@ void FLiteGPUScene::UpdateAABBData(FRDGBuilder& GraphBuilder)
 		FMemory::Memcpy(AABBArray.GetData(), SceneData.SectionAABBData.GetData(), 2 * SceneData.InstanceTypeNum * sizeof(FVector4f));
 		FResizeResourceSOAParams ResizeParams;
 		ResizeParams.NumBytes = SceneData.InstanceTypeNum * 2 * sizeof(FVector4f);
-		ResizeParams.NumArrays = SceneData.InstanceTypeNum * 2;
+		ResizeParams.NumArrays = 2;
 		auto MeshAABBBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, BufferState.MeshAABBBuffer, ResizeParams, TEXT("LiteGPUScene.AABBs"));
 	
 		struct FTaskContext
@@ -301,18 +305,22 @@ void FLiteGPUScene::UpdateSectionBuffers(FRDGBuilder& GraphBuilder)
 	{
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), SectionCount);
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			ResizeBufferIfNeeded(GraphBuilder, CounterBufferState.RWSectionCountBuffer, Desc, TEXT("LiteGPUScene.Counters.SectionCount"));
 		}		
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), SectionCount);
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			ResizeBufferIfNeeded(GraphBuilder, CounterBufferState.RWSectionCountCopyBuffer, Desc, TEXT("LiteGPUScene.Counters.SectionCountCopy"));
 		}
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), SectionCount);
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			ResizeBufferIfNeeded(GraphBuilder, CounterBufferState.RWSectionCountOffsetBuffer, Desc, TEXT("LiteGPUScene.Counters.SectionCountOffset"));
 		}		
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), SectionCount);
+			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			ResizeBufferIfNeeded(GraphBuilder, CounterBufferState.RWNextSectionCountOffsetBuffer, Desc, TEXT("LiteGPUScene.Counters.NextSectionCountOffset"));
 		}
 	}

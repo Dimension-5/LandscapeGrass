@@ -29,7 +29,7 @@ struct FLiteGPUSceneMeshSectionInfo
 	uint32 FirstVertexOffset;
 	uint32 FirstIndexOffset;
 	uint32 IndexCount;
-	uint32 PatchID;
+	uint32 SectionID;
 	uint32 VertexCount;
 	uint32 MaterialIndex;
 	float ScreenSizeMin;

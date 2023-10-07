@@ -53,6 +53,8 @@ public:
 	
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "ALiteGPUSceneManager")
 	TArray<TObjectPtr<ULiteGPUSceneComponent>> Components;
+	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "ALiteGPUSceneManager")
+	TArray<TObjectPtr<UStaticMesh>> Meshes;
 
 	TMap<TObjectPtr<ULiteGPUSceneComponent>, TMap<int64, int64>> CIDToPID;
 

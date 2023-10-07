@@ -157,7 +157,7 @@ void ALiteGPUSceneManager::OnAdd(TObjectPtr<ULiteGPUSceneComponent> Comp, const 
 
 		int32 SectionIndex = 0;
 		SceneData.InstanceSectionNums.SetNum(OldInstanceNum + Instances.Num());
-		SceneData.InstanceSectionIDs.SetNum(SceneData.InstanceSectionNums.Num() * SceneData.PerSectionMaxNum);
+		SceneData.InstanceSectionIDs.SetNum(SceneData.InstanceSectionNums.Num()* SceneData.PerSectionMaxNum);
 		for (auto& SectionInfo : SceneData.SectionInfos)
 		{
 			for (int32 IndexOffset = 0; IndexOffset < Instances.Num(); IndexOffset++)
@@ -251,26 +251,28 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 void ALiteGPUSceneManager::BuildLiteGPUScene()
 {
 	const auto StartTime = FDateTime::UtcNow();
-	Scene = MakeShared<FLiteGPUScene>(GetRootComponent()->GetScene()->GetFeatureLevel());
+	if (Scene == nullptr)
+	{
+		Scene = MakeShared<FLiteGPUScene>(GetRootComponent()->GetScene()->GetFeatureLevel());
+	}
 
 	// Glob all components
 	Components.Empty();
 	for (TObjectIterator<ULiteGPUSceneComponent> Itr; Itr; ++Itr)
 	{
 		auto Component = *Itr;
-		if (!Component->IsTemplate())
+		UWorld* World = Component->GetWorld();
+		if ((Component->GetWorld() == GetWorld()) && !Component->IsPendingKill() && !Component->IsTemplate())
 		{
 			Components.AddUnique(*Itr);
 		}
 	}
 
 	// Build combined vb/ib data here
-	TArray<TObjectPtr<UStaticMesh>> Meshes;
 	for (auto Component : Components)
 	{
 		Meshes.AddUnique(Component->GetUnderlyingMesh());
 	}
-
 	Scene->BuildScene(Meshes);
 
 	ENQUEUE_RENDER_COMMAND(UpdateLiteGPUScene)(
@@ -285,9 +287,12 @@ void ALiteGPUSceneManager::BuildLiteGPUScene()
 	const auto Elapsed = FDateTime::UtcNow() - StartTime;
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Lite GPU scene build finished in %d milliseconds"), Elapsed.GetTotalMilliseconds());
 
-	RenderComp = NewObject<ULiteGPUSceneRenderComponent>(this, TEXT("LiteGPUSceneRenderComponent"));
-	RenderComp->Scene = Scene;
-	RenderComp->RegisterComponent();
+	if (RenderComp == nullptr)
+	{
+		RenderComp = NewObject<ULiteGPUSceneRenderComponent>(this, TEXT("LiteGPUSceneRenderComponent"));
+		RenderComp->Scene = Scene;
+		RenderComp->RegisterComponent();
+	}
 }
 
 void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)

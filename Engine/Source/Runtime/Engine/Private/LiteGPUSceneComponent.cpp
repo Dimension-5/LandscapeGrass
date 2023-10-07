@@ -134,20 +134,20 @@ FLiteGPUSceneProxy::FLiteGPUSceneProxy(ULiteGPUSceneRenderComponent* Component, 
 		if (Mat && Mat->GetRenderProxy())
 		{
 			FMaterialRenderProxy* MatProxy = Mat->GetRenderProxy();
-			const TArray<FLiteGPUSceneMeshSectionInfo>& PatchInfoArray = pair.Value;
-			for (const FLiteGPUSceneMeshSectionInfo& PatchInfo : PatchInfoArray)
+			const TArray<FLiteGPUSceneMeshSectionInfo>& SectionInfoArray = pair.Value;
+			for (const FLiteGPUSceneMeshSectionInfo& SectionInfo : SectionInfoArray)
 			{
-				int32 InsertPatchIndex = AllSections.Add(PatchInfo);
-				TArray<int32>* pPatchIndiceArray = MaterialToSectionIDsMap.Find(MatProxy);
-				if (pPatchIndiceArray)
+				int32 InsertSectionIndex = AllSections.Add(SectionInfo);
+				TArray<int32>* pSectionIndiceArray = MaterialToSectionIDsMap.Find(MatProxy);
+				if (pSectionIndiceArray)
 				{
-					pPatchIndiceArray->Add(InsertPatchIndex);
+					pSectionIndiceArray->Add(InsertSectionIndex);
 				}
 				else
 				{
-					TArray<int32> PatchIndiceArray;
-					PatchIndiceArray.Add(InsertPatchIndex);
-					MaterialToSectionIDsMap.Add(MatProxy, PatchIndiceArray);
+					TArray<int32> SectionIndiceArray;
+					SectionIndiceArray.Add(InsertSectionIndex);
+					MaterialToSectionIDsMap.Add(MatProxy, SectionIndiceArray);
 				}
 			}
 		}
