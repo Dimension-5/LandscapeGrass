@@ -228,7 +228,7 @@ public:
 	inline FLiteGPUCounterBufferState GetCounterBufferState() const { return CounterBufferState; }
 	inline FLiteGPUSceneVertexFactory* GetVertexFactory() const 
 	{
-		return CurrentIndicesVertexBuffer ? DynamicVFMap[CurrentIndicesVertexBuffer].pGPUDrivenVertexFactory : nullptr; 
+		return pGPUDrivenVertexFactory;
 	}
 
 protected:
@@ -260,12 +260,9 @@ protected:
 	FLiteGPUSceneBufferState BufferState;
 	FLiteGPUCounterBufferState CounterBufferState;
 
-	struct DynamicVF
-	{
-		FLiteGPUSceneVertexFactory* pGPUDrivenVertexFactory = nullptr;
-		FVertexBuffer* GPUIndicesVertexBuffer;
-	};
-	TMap<FBufferRHIRef, DynamicVF> DynamicVFMap;
+	FLiteGPUSceneVertexFactory* pGPUDrivenVertexFactory = nullptr;
+	FVertexBuffer* GPUIndicesVertexBuffer = nullptr;
+
 	FBufferRHIRef CurrentIndicesVertexBuffer = nullptr;
 
 	FRDGAsyncScatterUploadBuffer SectionInfoUploadBuffer;

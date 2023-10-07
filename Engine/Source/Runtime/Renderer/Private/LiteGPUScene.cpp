@@ -155,6 +155,13 @@ void FLiteGPUScene::buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllS
 	}	
 	// Do upload
 	CombinedBuffer.Initialize(CombinedData.Vertices, CombinedData.Indices);
+	// Invalidate vertex factory
+	if (pGPUDrivenVertexFactory != nullptr)
+	{
+		pGPUDrivenVertexFactory->ReleaseResource();
+		pGPUDrivenVertexFactory = nullptr;
+		GPUIndicesVertexBuffer = nullptr;
+	}
 }
 
 void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
@@ -359,20 +366,25 @@ void FLiteGPUScene::UpdateViewBuffers(FRDGBuilder& GraphBuilder)
 			Desc.Usage |= EBufferUsageFlags::VertexBuffer;
 			auto InstanceIndiceBuffer = ResizeBufferIfNeeded(GraphBuilder, ViewBufferState.RWInstanceIndiceBuffer, Desc, TEXT("LiteGPUScene.View.DrawIndices"));
 		
-			CurrentIndicesVertexBuffer = ViewBufferState.RWInstanceIndiceBuffer->GetRHI();
-			auto pVF = DynamicVFMap.Find(CurrentIndicesVertexBuffer);
-			if (pVF == nullptr)
+			if (CurrentIndicesVertexBuffer != ViewBufferState.RWInstanceIndiceBuffer->GetRHI())
 			{
-				DynamicVF NewVF = {};
-				NewVF.GPUIndicesVertexBuffer = new FVertexBuffer();
-				NewVF.GPUIndicesVertexBuffer->InitResource(FRHICommandListExecutor::GetImmediateCommandList());
-				NewVF.GPUIndicesVertexBuffer->VertexBufferRHI = CurrentIndicesVertexBuffer;
-				
-				NewVF.pGPUDrivenVertexFactory = new FLiteGPUSceneVertexFactory(FeatureLevel);
-				NewVF.pGPUDrivenVertexFactory->Init_RenderThread(CombinedBuffer.VertexBuffer, NewVF.GPUIndicesVertexBuffer);
-				BeginInitResource(NewVF.pGPUDrivenVertexFactory);
+				CurrentIndicesVertexBuffer = ViewBufferState.RWInstanceIndiceBuffer->GetRHI();
+				if (pGPUDrivenVertexFactory != nullptr)
+				{
+					pGPUDrivenVertexFactory->ReleaseResource();
+					pGPUDrivenVertexFactory = nullptr;
+				}
+			}
 
-				DynamicVFMap.Add(CurrentIndicesVertexBuffer, NewVF);
+			if (pGPUDrivenVertexFactory == nullptr)
+			{
+				GPUIndicesVertexBuffer = new FVertexBuffer();
+				GPUIndicesVertexBuffer->InitResource(FRHICommandListExecutor::GetImmediateCommandList());
+				GPUIndicesVertexBuffer->VertexBufferRHI = CurrentIndicesVertexBuffer;
+				
+				pGPUDrivenVertexFactory = new FLiteGPUSceneVertexFactory(FeatureLevel);
+				pGPUDrivenVertexFactory->Init_RenderThread(CombinedBuffer.VertexBuffer, GPUIndicesVertexBuffer);
+				BeginInitResource(pGPUDrivenVertexFactory);
 			}
 		}
 		{
@@ -611,13 +623,20 @@ FLiteGPUCombinedBuffer::~FLiteGPUCombinedBuffer()
 
 void FLiteGPUCombinedBuffer::Initialize(const TArray<FLiteGPUSceneMeshVertex>& Vertices, const TArray<uint32>& Indices)
 {
-	if (bInitialized)
-	{
-		return;
-	}
 	UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUCombinedBuffer::Initialize"));
 
-	check(VertexBuffer == nullptr && IndexBuffer == nullptr);
+	UsedBytes = 0;
+	if (IndexBuffer != nullptr)
+	{
+		IndexBuffer->ReleaseResource();
+		delete IndexBuffer;
+	}
+	if (VertexBuffer != nullptr)
+	{
+		VertexBuffer->ReleaseResource();
+		delete VertexBuffer;
+	}
+
 	VertexBuffer = new FLiteGPUSceneMeshVertexBuffer();
 	IndexBuffer = new FLiteGPUSceneMeshIndexBuffer();
 
