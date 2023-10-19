@@ -140,7 +140,7 @@ bool OcclusionCullingInstance(float3 BoundsCenter, float3 BoundsExtent)
 	Depth.z = HZBTexture.SampleLevel( HZBSampler, Rect.zy * HZBUvFactor.xy, Level ).r;
 	Depth.w = HZBTexture.SampleLevel( HZBSampler, Rect.zw * HZBUvFactor.xy, Level ).r;
 	MinDepth = min( min(Depth.x, Depth.y), min(Depth.z, Depth.w) );
-
+	
 	// Inverted Z buffer
 	return RectMax.z >= MinDepth;
 }

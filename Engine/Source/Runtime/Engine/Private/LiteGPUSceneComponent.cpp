@@ -126,33 +126,6 @@ FLiteGPUSceneProxy::FLiteGPUSceneProxy(ULiteGPUSceneRenderComponent* Component, 
 	: FPrimitiveSceneProxy(Component, TEXT("LiteGPUScene")),
 	Scene(Component->Scene)
 {
-	// Build up a stats of <mat_proxy, patch_ids> map
-	for (auto& pair : Scene->CombinedData.SectionsMap)
-	{
-		int32 MappedMaterialIndex = pair.Key;
-		UMaterialInterface* Mat = Scene->CombinedData.Materials[MappedMaterialIndex];
-		if (Mat && Mat->GetRenderProxy())
-		{
-			FMaterialRenderProxy* MatProxy = Mat->GetRenderProxy();
-			const TArray<FLiteGPUSceneMeshSectionInfo>& SectionInfoArray = pair.Value;
-			for (const FLiteGPUSceneMeshSectionInfo& SectionInfo : SectionInfoArray)
-			{
-				int32 InsertSectionIndex = AllSections.Add(SectionInfo);
-				TArray<int32>* pSectionIndiceArray = MaterialToSectionIDsMap.Find(MatProxy);
-				if (pSectionIndiceArray)
-				{
-					pSectionIndiceArray->Add(InsertSectionIndex);
-				}
-				else
-				{
-					TArray<int32> SectionIndiceArray;
-					SectionIndiceArray.Add(InsertSectionIndex);
-					MaterialToSectionIDsMap.Add(MatProxy, SectionIndiceArray);
-				}
-			}
-		}
-	}
-
 	pVFUserData = new FLiteGPUSceneVertexFactoryUserData();
 	pVFUserData->SceneProxy = this;
 
@@ -268,6 +241,38 @@ void FLiteGPUSceneProxy::DrawMeshBatches(int32 ViewIndex, const FSceneView* View
 	{
 		return;
 	}
+
+	TMap<FMaterialRenderProxy*, TArray<int32>> MaterialToSectionIDsMap;
+	TArray<FLiteGPUSceneMeshSectionInfo> AllSections;
+	{
+		FScopeLock LCK(&Scene->CombinedData.CombinedDataMutex);
+		for (auto& pair : Scene->CombinedData.SectionsMap)
+		{
+			int32 MappedMaterialIndex = pair.Key;
+			UMaterialInterface* Mat = Scene->CombinedData.Materials[MappedMaterialIndex];
+			if (Mat && Mat->GetRenderProxy())
+			{
+				FMaterialRenderProxy* MatProxy = Mat->GetRenderProxy();
+				const TArray<FLiteGPUSceneMeshSectionInfo>& SectionInfoArray = pair.Value;
+				for (const FLiteGPUSceneMeshSectionInfo& SectionInfo : SectionInfoArray)
+				{
+					int32 InsertSectionIndex = AllSections.Add(SectionInfo);
+					TArray<int32>* pSectionIndiceArray = MaterialToSectionIDsMap.Find(MatProxy);
+					if (pSectionIndiceArray)
+					{
+						pSectionIndiceArray->Add(InsertSectionIndex);
+					}
+					else
+					{
+						TArray<int32> SectionIndiceArray;
+						SectionIndiceArray.Add(InsertSectionIndex);
+						MaterialToSectionIDsMap.Add(MatProxy, SectionIndiceArray);
+					}
+				}
+			}
+		}
+	}
+
 	int32 IndirectDrawOffset = 0;
 	if (auto VertexFactory = Scene->GetVertexFactory())
 	{
@@ -318,6 +323,18 @@ bool FLiteGPUSceneProxy::IsInitialized() const
 	return Scene.IsValid();
 }
 
+#if RHI_RAYTRACING
+bool FLiteGPUSceneProxy::HasRayTracingRepresentation() const
+{
+	return true;
+}
+
+void FLiteGPUSceneProxy::GetDynamicRayTracingInstances(FRayTracingMaterialGatheringContext& Context, TArray<struct FRayTracingInstance>& OutRayTracingInstances)
+{
+
+}
+#endif
+
 void FLiteGPUSceneProxy::Init_RenderingThread()
 {
 	check(Scene->CombinedBuffer.bInitialized);
@@ -347,6 +364,7 @@ void ULiteGPUSceneRenderComponent::GetUsedMaterials(TArray<UMaterialInterface*>&
 
 	if (Scene.IsValid())
 	{
+		FScopeLock LCK(&Scene->CombinedData.CombinedDataMutex);
 		for (int32 MatIndex = 0; MatIndex < Scene->CombinedData.Materials.Num(); MatIndex++)
 		{
 			OutMaterials.Add(Scene->CombinedData.Materials[MatIndex]);

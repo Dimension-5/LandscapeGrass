@@ -95,11 +95,13 @@ void FLiteGPUScene::fillMeshLODSectionData(int32 LodIndex, const FStaticMeshRend
 
 void FLiteGPUScene::buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
 {
+	SceneData.SectionInfos.Empty();
+
 	CombinedData.Materials.Empty();
 	CombinedData.SectionsMap.Empty();
 	CombinedData.Vertices.Empty();
 	CombinedData.Indices.Empty();
-
+	UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUCombinedBuffer::Combine Vertices"));
 	for (int32 MeshIndex = 0; MeshIndex < AllSourceMeshes.Num(); MeshIndex++)
 	{
 		if (UStaticMesh* StaticMesh = AllSourceMeshes[MeshIndex])
@@ -134,6 +136,13 @@ void FLiteGPUScene::buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllS
 						, SectionInfo.ScreenSizeMin
 						, SectionInfo.ScreenSizeMax
 					);
+
+					UE_LOG(LogLiteGPUScene, Log, 
+						TEXT("FLiteGPUCombinedBuffer::Mesh %s, Section %d, LOD %d, Vertices Offset %d, VertexCount %d"), 
+						*SectionInfo.MeshName, SectionIndex, LODIndex,
+						SectionInfo.FirstVertexOffset, SectionInfo.VertexCount
+					);
+
 					if (auto* pSections = CombinedData.SectionsMap.Find(MappedMatIndex))
 					{
 						pSections->Add(SectionInfo);
@@ -144,6 +153,7 @@ void FLiteGPUScene::buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllS
 						Sections.Add(SectionInfo);
 						CombinedData.SectionsMap.Add(MappedMatIndex, Sections);
 					}
+					SceneData.SectionInfos.Add(SectionInfo);
 				}
 			}
 		}
@@ -153,6 +163,7 @@ void FLiteGPUScene::buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllS
 	{
 		check((int32)Index < CombinedData.Vertices.Num());
 	}	
+	UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUCombinedBuffer::Combined %d Vertices"), CombinedData.Vertices.Num());
 	// Do upload
 	CombinedBuffer.Initialize(CombinedData.Vertices, CombinedData.Indices);
 	// Invalidate vertex factory
@@ -167,16 +178,7 @@ void FLiteGPUScene::buildCombinedData(const TArray<TObjectPtr<UStaticMesh>> AllS
 void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
 {
 	SceneData.SourceMeshes = AllSourceMeshes;
-	SceneData.SectionInfos.Empty();
 	SceneData.PerSectionMaxNum = 0;
-	for (auto& [K, V] : CombinedData.SectionsMap)
-	{
-		for (auto& Section : V)
-		{
-			Section.SectionID = SceneData.SectionInfos.Num();
-			SceneData.SectionInfos.Add(Section);
-		}
-	}
 	// Calculate teh max lod numbers among all meshes
 	for (UStaticMesh* StaticMesh : AllSourceMeshes)
 	{
@@ -197,7 +199,7 @@ void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSour
 	// Some initialization
 	SceneData.InstanceTypeNum = SceneData.SourceMeshes.Num();
 	SceneData.TotalSectionNum = SceneData.SectionInfos.Num();
-	SceneData.SectionInstanceNums.SetNum(SceneData.TotalSectionNum);
+	SceneData.SectionInstanceNums.SetNumZeroed(SceneData.TotalSectionNum);
 	// Stores AABB with BL-UR format
 	TArray<FVector4f> AABBs;
 	AABBs.SetNum(2 * SceneData.InstanceTypeNum);
@@ -224,6 +226,8 @@ void FLiteGPUScene::buildSceneData(const TArray<TObjectPtr<UStaticMesh>> AllSour
 
 void FLiteGPUScene::BuildScene(const TArray<TObjectPtr<UStaticMesh>> AllSourceMeshes)
 {
+	FScopeLock LCK(&CombinedData.CombinedDataMutex);
+
 	buildCombinedData(AllSourceMeshes);
 	buildSceneData(AllSourceMeshes);
 }
@@ -261,6 +265,8 @@ void FLiteGPUScene::UpdateSectionInfos(FRDGBuilder& GraphBuilder)
 		});
 		SectionInfoUploadBuffer.End(GraphBuilder, TaskContext.SectionInfoUploader);
 		SectionInfoUploadBuffer.Release();
+
+		UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUCombinedBuffer::UpdateSectionInfos"));
 	}
 	else
 	{
@@ -296,6 +302,8 @@ void FLiteGPUScene::UpdateAABBData(FRDGBuilder& GraphBuilder)
 			});
 		MeshAABBUploadBuffer.End(GraphBuilder, TaskContext.AABBUploader);
 		MeshAABBUploadBuffer.Release();
+
+		UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUCombinedBuffer::UpdateAABBData"));
 	}
 	else
 	{
@@ -653,6 +661,9 @@ void FLiteGPUCombinedBuffer::Initialize(const TArray<FLiteGPUSceneMeshVertex>& V
 	{
 		BeginInitResource(IndexBuffer);
 	}
+
+	UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUCombinedBuffer::Uploaded %d Indices"), Indices.Num());
+	UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUCombinedBuffer::Uploaded %d Vertices"), Vertices.Num());
 
 	UsedBytes += sizeof(FLiteGPUSceneMeshVertex) * Vertices.Num();
 	UsedBytes += sizeof(uint32) * Indices.Num();

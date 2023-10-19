@@ -240,7 +240,6 @@ void ALiteGPUSceneManager::OnRemove(TObjectPtr<ULiteGPUSceneComponent> Comp, con
 			if (SceneData.SectionInfos[pIndex].MeshIndex == MeshIndex)
 			{
 				SceneData.SectionInstanceNums[pIndex] -= Instances.Num();
-				break;
 			}
 		}
 
@@ -257,21 +256,15 @@ void ALiteGPUSceneManager::BuildLiteGPUScene()
 	}
 
 	// Glob all components
-	Components.Empty();
+	Meshes.Empty();
 	for (TObjectIterator<ULiteGPUSceneComponent> Itr; Itr; ++Itr)
 	{
 		auto Component = *Itr;
 		UWorld* World = Component->GetWorld();
 		if ((Component->GetWorld() == GetWorld()) && !Component->IsPendingKill() && !Component->IsTemplate())
 		{
-			Components.AddUnique(*Itr);
+			Meshes.AddUnique(Component->GetUnderlyingMesh());
 		}
-	}
-
-	// Build combined vb/ib data here
-	for (auto Component : Components)
-	{
-		Meshes.AddUnique(Component->GetUnderlyingMesh());
 	}
 	Scene->BuildScene(Meshes);
 
@@ -287,12 +280,9 @@ void ALiteGPUSceneManager::BuildLiteGPUScene()
 	const auto Elapsed = FDateTime::UtcNow() - StartTime;
 	UE_LOG(LogLiteGPUScene, Log, TEXT("Lite GPU scene build finished in %d milliseconds"), Elapsed.GetTotalMilliseconds());
 
-	if (RenderComp == nullptr)
-	{
-		RenderComp = NewObject<ULiteGPUSceneRenderComponent>(this, TEXT("LiteGPUSceneRenderComponent"));
-		RenderComp->Scene = Scene;
-		RenderComp->RegisterComponent();
-	}
+	RenderComp = NewObject<ULiteGPUSceneRenderComponent>(this, TEXT("LiteGPUSceneRenderComponent"));
+	RenderComp->Scene = Scene;
+	RenderComp->RegisterComponent();
 }
 
 void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
@@ -303,11 +293,16 @@ void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENa
 	bool bEnableLiteGPUScene = CVarEnable ? CVarEnable->GetInt() > 0 : false;
 	if (bEnableLiteGPUScene)
 	{
-		for (auto Component : Components)
+		for (TObjectIterator<ULiteGPUSceneComponent> Itr; Itr; ++Itr)
 		{
-			Component->Handler = this;
-			Component->ManagedTick(DeltaTime);
-		}		
+			auto Component = *Itr;
+			UWorld* World = Component->GetWorld();
+			if ((Component->GetWorld() == GetWorld()) && !Component->IsPendingKill() && !Component->IsTemplate())
+			{
+				Component->Handler = this;
+				Component->ManagedTick(DeltaTime);
+			}
+		}
 
 		if (Scene.IsValid())
 		{

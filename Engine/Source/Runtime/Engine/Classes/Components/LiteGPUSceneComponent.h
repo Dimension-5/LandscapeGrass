@@ -89,6 +89,9 @@ public:
 	FLiteGPUSceneProxy(ULiteGPUSceneRenderComponent* Component, ERHIFeatureLevel::Type InFeatureLevel);
 	virtual ~FLiteGPUSceneProxy();
 
+	bool HasRayTracingRepresentation() const override;
+	void GetDynamicRayTracingInstances(FRayTracingMaterialGatheringContext& Context, TArray<struct FRayTracingInstance>& OutRayTracingInstances) override;
+
 	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const override;
 
 	virtual bool CanBeOccluded() const override { return false; }
@@ -102,8 +105,6 @@ public:
 	TSharedPtr<FLiteGPUScene> Scene = nullptr;
 	FLiteGPUSceneVertexFactoryUserData* pVFUserData = nullptr;
 	FSceneInterface* CachedSceneInterface = nullptr;
-	TMap<FMaterialRenderProxy*, TArray<int32>> MaterialToSectionIDsMap;
-	TArray<FLiteGPUSceneMeshSectionInfo> AllSections;
 };
 
 UCLASS()
