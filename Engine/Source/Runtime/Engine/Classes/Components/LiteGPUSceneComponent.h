@@ -47,14 +47,16 @@ public:
 	virtual bool ClearInstances();
 
 	/** Sets the fading start and culling end distances for this component. */
-	// UFUNCTION(BlueprintCallable, Category = "Components|LiteGPUScene")
-	// void SetCullDistances(int32 StartCullDistance, int32 EndCullDistance);
+	UFUNCTION(BlueprintCallable, Category = "Components|LiteGPUScene")
+	void SetCullDistances(int32 StartCullDistance, int32 EndCullDistance);
 
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
 	FPrimitiveSceneProxy* CreateSceneProxy() override;
 
 	TObjectPtr<class UStaticMesh> GetUnderlyingMesh() { return StaticMesh; }
+	uint32 GetStartCullDistance() const { return StartCullDistance; }
+	uint32 GetEndCullDistance() const { return EndCullDistance; }
 
 private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = StaticMesh, meta = (AllowPrivateAccess = "true"))
@@ -76,6 +78,9 @@ private:
 	};
 	TQueue<TSharedPtr<Op>, EQueueMode::Spsc> PendingOps;
 	FCriticalSection OpsMutex;
+	
+	std::atomic<uint32> StartCullDistance = 0;
+	std::atomic<uint32> EndCullDistance = INT32_MAX;
 
 	friend class ALiteGPUSceneManager;
 	ILiteGPUSceneInstanceHandler* Handler;

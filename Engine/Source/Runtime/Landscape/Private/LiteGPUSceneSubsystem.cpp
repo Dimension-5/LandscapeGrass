@@ -293,6 +293,8 @@ void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENa
 	bool bEnableLiteGPUScene = CVarEnable ? CVarEnable->GetInt() > 0 : false;
 	if (bEnableLiteGPUScene)
 	{
+		TArray<UStaticMesh*> FrameMeshes;
+		TArray<FUint32Vector2> Distances;
 		for (TObjectIterator<ULiteGPUSceneComponent> Itr; Itr; ++Itr)
 		{
 			auto Component = *Itr;
@@ -301,15 +303,20 @@ void ALiteGPUSceneManager::DoTick(float DeltaTime, enum ELevelTick TickType, ENa
 			{
 				Component->Handler = this;
 				Component->ManagedTick(DeltaTime);
+				FrameMeshes.Add(Component->GetUnderlyingMesh());
+				Distances.Add(
+					FUint32Vector2(Component->GetStartCullDistance(), Component->GetEndCullDistance())
+				);
 			}
 		}
 
 		if (Scene.IsValid())
 		{
 			ENQUEUE_RENDER_COMMAND(UpdateLiteGPUScene)(
-				[this](FRHICommandListImmediate& RHICmdList)
+				[this, FrameMeshes, Distances](FRHICommandListImmediate& RHICmdList)
 				{
 					FRDGBuilder GraphBuilder(RHICmdList);
+					Scene->UpdateCullDistance(GraphBuilder, FrameMeshes, Distances);
 					Scene->UpdateInstanceData(GraphBuilder);
 					GraphBuilder.Execute();
 				});

@@ -11,6 +11,9 @@ Buffer<float4> InstanceTransformBufferC;
 Buffer<float4> InstanceTransformBufferD;
 Buffer<uint> InstanceTypeBuffer;
 Buffer<float4> AABBBuffer;
+#if LITE_GPU_SCENE_DISTANCE_CULLING
+Buffer<uint2> CullDistanceBuffer;
+#endif
 
 uint GetTypeID(uint InstanceID)
 {
@@ -195,8 +198,8 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 		
 		float4 LocalAABBMin = AABBBuffer[2 * InstanceType + 0];
 		float4 LocalAABBMax = AABBBuffer[2 * InstanceType + 1];
-
-		float radius = LocalAABBMin.w;
+		
+		float Radius = LocalAABBMin.w;
 		float3 LocalAABBCenter = (LocalAABBMin.xyz + LocalAABBMax.xyz) / 2.0f;
 		float3 LocalAABBExtent = (LocalAABBMax.xyz - LocalAABBMin.xyz) / 2.0f;
 		
@@ -214,23 +217,33 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 		float3 AABBCenter = Float3VectorTransform(LocalAABBCenter, InstanceTransform).xyz;
 		float3 AABBExtent = CalcBoundExtent(LocalAABBExtent, InstanceTransform);
 		
-		radius = CalcBoundSphereRadius(radius, AABBExtent, InstanceTransform);
+#if LITE_GPU_SCENE_DISTANCE_CULLING
+		uint2 DistanceRange = CullDistanceBuffer[InstanceType];
+		const float Dist = distance(AABBCenter.xyz, ViewLocation);
+		bool bInRange = Dist <= DistanceRange.y;
+		bool bForceDisplay = Dist <= DistanceRange.x;
+#else
+		bool bInRange = true;
+		bool bForceDisplay = false;
+#endif
+		
+		Radius = CalcBoundSphereRadius(Radius, AABBExtent, InstanceTransform);
 
 		bool bInFrustum0 = FrustumCullingInstance(FrustumPermutedPlanes0, AABBCenter, AABBExtent);
 		bool bInFrustum1 = FrustumCullingInstance(FrustumPermutedPlanes1, AABBCenter, AABBExtent);
 		
 #if LITE_GPU_SCENE_SCREEN_SIZE_CULLING
-		float ScreenSize = ComputeBoundsScreenSize(AABBCenter.xyz, radius, ViewLocation, ProjMatrix);
+		float ScreenSize = ComputeBoundsScreenSize(AABBCenter.xyz, Radius, ViewLocation, ProjMatrix);
 		RWUnCulledInstanceScreenSize[InstanceID] = ScreenSize;
 #else
 		float ScreenSize = 1.f;
 #endif
 		
-		if (bInFrustum0 && bInFrustum1)
+		if (bInRange && bInFrustum0 && bInFrustum1)
 		{
-			if (OcclusionCullingInstance(AABBCenter + PreviewTranslation.xyz, AABBExtent))
+			if (bForceDisplay || OcclusionCullingInstance(AABBCenter + PreviewTranslation.xyz, AABBExtent))
 			{
-				const bool bInstanceUnCulled = ScreenSize > LiteGPUSceneMinScreenSize;
+				const bool bInstanceUnCulled = bForceDisplay || (ScreenSize > LiteGPUSceneMinScreenSize);
 #if DIM_WAVE_OPS && PLATFORM_SUPPORTS_SM6_0_WAVE_OPERATIONS
 				const uint UnCulledInstancesCount = WaveActiveCountBits(bInstanceUnCulled);
 				if (UnCulledInstancesCount > 0)
@@ -238,9 +251,6 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 					uint BaseInsertIndex = 0u;
 					if(WaveIsFirstLane())
 					{
-#if ENABLE_LITE_GPU_SCENE_DEBUG
-						InterlockedAdd(RWUnCulledInstanceIndirectParameters[1], UnCulledInstancesCount);
-#endif
 						InterlockedAdd(RWUnCulledInstanceNum[0], UnCulledInstancesCount, BaseInsertIndex);
 					}
 					BaseInsertIndex = WaveReadLaneFirst(BaseInsertIndex);

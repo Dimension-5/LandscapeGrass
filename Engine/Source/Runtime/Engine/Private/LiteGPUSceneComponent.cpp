@@ -93,6 +93,12 @@ bool ULiteGPUSceneComponent::RemoveInstances(const TArray<int64>& InstancesToRem
 	return false;
 }
 
+void ULiteGPUSceneComponent::SetCullDistances(int32 Start, int32 End)
+{
+	StartCullDistance.store(Start);
+	EndCullDistance.store(End);
+}
+
 bool ULiteGPUSceneComponent::ClearInstances()
 {
 	auto NewOp = MakeShared<Op>(PersistantInstances, OP_REMOVE);

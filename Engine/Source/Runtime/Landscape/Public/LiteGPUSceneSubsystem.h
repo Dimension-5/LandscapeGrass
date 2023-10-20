@@ -47,7 +47,7 @@ class LANDSCAPE_API ALiteGPUSceneManager : public AActor, public ILiteGPUSceneIn
 public:
 	virtual void OnAdd(TObjectPtr<ULiteGPUSceneComponent>, const TArrayView<FLiteGPUSceneInstance> Instances) override;
 	virtual void OnRemove(TObjectPtr<ULiteGPUSceneComponent>, const TArrayView<FLiteGPUSceneInstance> Instances) override;
-	
+
 	UFUNCTION(BlueprintPure, meta = (WorldContext = WorldContext), Category = "ALiteGPUSceneManager")
 	static ALiteGPUSceneManager* Get(const UObject* WorldContext);
 	

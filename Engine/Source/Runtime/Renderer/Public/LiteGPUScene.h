@@ -4,6 +4,7 @@
 #include "UnifiedBuffer.h"
 
 class UStaticMesh;
+class ULiteGPUSceneComponent;
 struct FLiteGPUSceneVertexFactory;
 
 struct FLiteGPUHalf2
@@ -154,6 +155,7 @@ struct FLiteGPUSceneData
 struct FLiteGPUSceneBufferState
 {
 	TRefCountPtr<FRDGPooledBuffer> SectionInfoBuffer;
+	TRefCountPtr<FRDGPooledBuffer> MeshCullDistanceBuffer;
 	TRefCountPtr<FRDGPooledBuffer> MeshAABBBuffer;
 	TRefCountPtr<FRDGPooledBuffer> SectorInfoBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceTypeBuffer;
@@ -218,6 +220,7 @@ public:
 	RENDERER_API void UpdateSectionInfos(FRDGBuilder& GraphBuilder);
 	RENDERER_API void UpdateAABBData(FRDGBuilder& GraphBuilder);
 	RENDERER_API void UpdateInstanceData(FRDGBuilder& GraphBuilder);
+	RENDERER_API void UpdateCullDistance(FRDGBuilder& GraphBuilder, TArray<UStaticMesh*> Meshes, TArray<FUint32Vector2> Distances);
 
 	RENDERER_API void EnqueueUpdates_TS(const FLiteGPUSceneUpdate&& UpdateToEnqueue);
 
@@ -267,6 +270,7 @@ protected:
 	FBufferRHIRef CurrentIndicesVertexBuffer = nullptr;
 
 	FRDGAsyncScatterUploadBuffer SectionInfoUploadBuffer;
+	FRDGAsyncScatterUploadBuffer MeshCullDistanceUploadBuffer;
 	FRDGAsyncScatterUploadBuffer MeshAABBUploadBuffer;
 	FRDGAsyncScatterUploadBuffer SectorInfoUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceTypeUploadBuffer;

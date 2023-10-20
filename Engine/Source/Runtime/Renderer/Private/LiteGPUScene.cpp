@@ -337,6 +337,56 @@ void FLiteGPUScene::UpdateAABBData(FRDGBuilder& GraphBuilder)
 
 DECLARE_GPU_STAT(LiteGPUSceneUpdate)
 
+void FLiteGPUScene::UpdateCullDistance(FRDGBuilder& GraphBuilder, TArray<UStaticMesh*> Meshes, TArray<FUint32Vector2> Distances)
+{
+	if (SceneData.InstanceTypeNum != 0)
+	{
+		TResourceArray<FUint32Vector2, VERTEXBUFFER_ALIGNMENT> DistancesArray;
+		DistancesArray.SetNumUninitialized(SceneData.InstanceTypeNum);
+		int32 MeshIndex = 0;
+		for (auto Mesh : Meshes)
+		{
+			int32 SourceMeshIndex = 0;
+			for (auto SourceMesh : SceneData.SourceMeshes)
+			{
+				if (Mesh == SourceMesh)
+				{
+					DistancesArray[SourceMeshIndex] = Distances[MeshIndex];
+				}
+				SourceMeshIndex += 1;
+			}
+			MeshIndex += 1;
+		}
+		FResizeResourceSOAParams ResizeParams;
+		ResizeParams.NumBytes = SceneData.InstanceTypeNum * sizeof(FUint32Vector2);
+		ResizeParams.NumArrays = 2;
+		auto MeshCullDistancesBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, BufferState.MeshCullDistanceBuffer, ResizeParams, TEXT("LiteGPUScene.CullDistances"));
+
+		struct FTaskContext
+		{
+			FRDGScatterUploader* CullDistanceUploader = nullptr;
+		};
+		FTaskContext& TaskContext = *GraphBuilder.AllocObject<FTaskContext>();
+		TaskContext.CullDistanceUploader = MeshCullDistanceUploadBuffer.Begin(GraphBuilder, MeshCullDistancesBuffer, SceneData.InstanceTypeNum, sizeof(FUint32Vector2), TEXT("LiteGPUScene.Upload.CullDistances"));
+		GraphBuilder.AddCommandListSetupTask([&TaskContext, DistancesArray](FRHICommandListBase& RHICmdList) {
+			SCOPED_NAMED_EVENT(UpdateLiteGPUScene_CullDistances, FColor::Green);
+			LockIfValid(RHICmdList, TaskContext.CullDistanceUploader);
+
+			TaskContext.CullDistanceUploader->Add(0, DistancesArray.GetData(), DistancesArray.Num());
+
+			UnlockIfValid(RHICmdList, TaskContext.CullDistanceUploader);
+			});
+		MeshCullDistanceUploadBuffer.End(GraphBuilder, TaskContext.CullDistanceUploader);
+		MeshCullDistanceUploadBuffer.Release();
+
+		UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUCombinedBuffer::UpdateCullDistances"));
+	}
+	else
+	{
+		BufferState.MeshCullDistanceBuffer.SafeRelease();
+	}
+}
+
 void FLiteGPUScene::UpdateSectionBuffers(FRDGBuilder& GraphBuilder)
 {
 	const auto SectionCount = SceneData.TotalSectionNum;
