@@ -378,8 +378,6 @@ void FLiteGPUScene::UpdateCullDistance(FRDGBuilder& GraphBuilder, TArray<UStatic
 			});
 		MeshCullDistanceUploadBuffer.End(GraphBuilder, TaskContext.CullDistanceUploader);
 		MeshCullDistanceUploadBuffer.Release();
-
-		UE_LOG(LogLiteGPUScene, Log, TEXT("FLiteGPUCombinedBuffer::UpdateCullDistances"));
 	}
 	else
 	{
