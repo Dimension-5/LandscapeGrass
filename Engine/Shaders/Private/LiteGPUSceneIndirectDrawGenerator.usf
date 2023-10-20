@@ -94,7 +94,9 @@ void ClearVisibleInstanceCS(uint3 DTid : SV_DispatchThreadID)
 	}
 }
 
+#if LITE_GPU_SCENE_SCREEN_SIZE_CULLING
 Buffer<float> UnCulledInstanceScreenSize;
+#endif
 Buffer<int> UnCulledInstanceBuffer;
 
 float3 ViewLocation;
@@ -124,8 +126,11 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 	if (UniqueID < kUnCulledInstanceNum)
 	{
 		const int InstanceID = UnCulledInstanceBuffer[UniqueID];
+#if LITE_GPU_SCENE_SCREEN_SIZE_CULLING
 		float ScreenSize = min(UnCulledInstanceScreenSize[InstanceID], InstanceMaxScreenSize);
-
+#else
+		float ScreenSize = InstanceMaxScreenSize;
+#endif
 		uint SectionStart = InstanceID * PerSectionMaxNum;
 		uint SectionNum = InstanceSectionNumBuffer[InstanceID];
 		uint TypeIndex = InstanceTypeBuffer[InstanceID];
@@ -161,7 +166,7 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 				{
 					ScreenSizeMin += InstanceScreenSizeBias;
 				}
-				float ScreenSizeMax = SectionScreenSize.y*InstanceScreenSizeScale + InstanceScreenSizeBias;
+				float ScreenSizeMax = SectionScreenSize.y * InstanceScreenSizeScale + InstanceScreenSizeBias;
 				float FarthestCameraDistance = ComputeBoundsDrawDistance(ScreenSizeMin, Radius, ProjMatrix);
 				float ClosestCameraDistance = ComputeBoundsDrawDistance(ScreenSizeMax, Radius, ProjMatrix);
 				

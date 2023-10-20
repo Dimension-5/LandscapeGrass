@@ -4,6 +4,30 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogLiteGPUScene, Log, All);
 
+static int sLiteGPUSceneSectors = 0;
+static FAutoConsoleVariableRef CVarLiteGPUSceneSectors(
+	TEXT("r.LiteGPUScene.Sectors"),
+	sLiteGPUSceneSectors,
+	TEXT("Use LiteGPUScene Sectors.\n"),
+	ECVF_ReadOnly | ECVF_RenderThreadSafe
+);
+
+static int sLiteGPUSceneScreenSizeCulling = 1;
+static FAutoConsoleVariableRef CVarLiteGPUSceneScreenSizeCulling(
+	TEXT("r.LiteGPUScene.ScreenSizeCulling"),
+	sLiteGPUSceneScreenSizeCulling,
+	TEXT("Use LiteGPUScene Screen Size Culling.\n"),
+	ECVF_Scalability | ECVF_RenderThreadSafe
+);
+
+static int sLiteGPUSceneDistanceCulling = 1;
+static FAutoConsoleVariableRef CVarLiteGPUSceneDistanceCulling(
+	TEXT("r.LiteGPUScene.DistanceCulling"),
+	sLiteGPUSceneDistanceCulling,
+	TEXT("Use LiteGPUScene Distance Culling.\n"),
+	ECVF_Scalability | ECVF_RenderThreadSafe
+);
+
 FLiteGPUScene::FLiteGPUScene(ERHIFeatureLevel::Type InFeatureLevel)
 	: FeatureLevel(InFeatureLevel)
 {
@@ -347,10 +371,15 @@ void FLiteGPUScene::UpdateViewBuffers(FRDGBuilder& GraphBuilder)
 	if (Capacity != 0)
 	{
 		// VIEW BUFFERS
+		if (CVarLiteGPUSceneScreenSizeCulling->GetInt() != 0)
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(float), Capacity);
 			Desc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
 			auto UnCulledInstanceScreenSize = ResizeBufferIfNeeded(GraphBuilder, ViewBufferState.RWUnCulledInstanceScreenSize, Desc, TEXT("LiteGPUScene.View.ScreenSizes"));
+		}
+		else
+		{
+			ViewBufferState.RWUnCulledInstanceScreenSize.SafeRelease();
 		}
 		{
 			auto Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Capacity);
@@ -438,21 +467,13 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 		
 		auto InstanceSectionIDBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(uint32) * Capacity * SceneData.PerSectionMaxNum);
 		InstanceSectionIDBufferDesc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
-		auto InstanceSectionIDBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.InstanceSectionIDBuffer, InstanceSectionIDBufferDesc, TEXT("LiteGPUScene.SectionIDs"));
-
-		auto SectorInfoBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(FSectorInfo) * SectorCount);
-		SectorInfoBufferDesc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
-		auto SectorInfoBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.SectorInfoBuffer, SectorInfoBufferDesc, TEXT("LiteGPUScene.SectorInfos"));
 		
-		auto InstanceSectorIDBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(uint32) * Capacity);
-		InstanceSectorIDBufferDesc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
-		auto InstanceSectorIDBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.InstanceSectorIDBuffer, InstanceSectorIDBufferDesc, TEXT("LiteGPUScene.SectorIDs"));
-
+		auto InstanceSectionIDBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.InstanceSectionIDBuffer, InstanceSectionIDBufferDesc, TEXT("LiteGPUScene.SectionIDs"));
 		auto InstanceTransformBufferA = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBufferA, Capacity * sizeof(FVector4f), TEXT("LiteGPUScene.TransformsA"));
 		auto InstanceTransformBufferB = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBufferB, Capacity * sizeof(FVector4f), TEXT("LiteGPUScene.TransformsB"));
 		auto InstanceTransformBufferC = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBufferC, Capacity * sizeof(FVector4f), TEXT("LiteGPUScene.TransformsC"));
 		auto InstanceTransformBufferD = ResizeStructuredBufferIfNeededAligned(GraphBuilder, BufferState.InstanceTransformBufferD, Capacity * sizeof(FVector4f), TEXT("LiteGPUScene.TransformsD"));
-		
+
 		FLiteGPUSceneUpdate Update;
 		{
 			FScopeLock LCK(&SceneUpdatesMutex);
@@ -476,12 +497,23 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 			FRDGScatterUploader* InstanceSectorIDUploader = nullptr;
 		};
 		FTaskContext& TaskContext = *GraphBuilder.AllocObject<FTaskContext>();
-		TaskContext.SectorInfoUploader = SectorInfoUploadBuffer.Begin(GraphBuilder, SectorInfoBuffer, SectorCount, sizeof(FSectorInfo), TEXT("LiteGPUScene.Upload.SectorInfos"));
+		if (CVarLiteGPUSceneSectors->GetInt() != 0)
+		{
+			auto SectorInfoBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(FSectorInfo) * SectorCount);
+			SectorInfoBufferDesc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
+			auto SectorInfoBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.SectorInfoBuffer, SectorInfoBufferDesc, TEXT("LiteGPUScene.SectorInfos"));
+
+			auto InstanceSectorIDBufferDesc = FRDGBufferDesc::CreateByteAddressDesc(sizeof(uint32) * Capacity);
+			InstanceSectorIDBufferDesc.Usage |= EBufferUsageFlags::ByteAddressBuffer;
+			auto InstanceSectorIDBuffer = ResizeBufferIfNeeded(GraphBuilder, BufferState.InstanceSectorIDBuffer, InstanceSectorIDBufferDesc, TEXT("LiteGPUScene.SectorIDs"));
+			
+			TaskContext.SectorInfoUploader = SectorInfoUploadBuffer.Begin(GraphBuilder, SectorInfoBuffer, SectorCount, sizeof(FSectorInfo), TEXT("LiteGPUScene.Upload.SectorInfos"));
+			TaskContext.InstanceSectorIDUploader = InstanceSectorIDUploadBuffer.Begin(GraphBuilder, InstanceSectorIDBuffer, InstanceCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.SectorIDs"));
+		}
 		TaskContext.InstanceTransformUploaderA = InstanceTransformUploadBufferA.Begin(GraphBuilder, InstanceTransformBufferA, InstanceCount, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.TransformsA"));
 		TaskContext.InstanceTransformUploaderB = InstanceTransformUploadBufferB.Begin(GraphBuilder, InstanceTransformBufferB, InstanceCount, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.TransformsB"));
 		TaskContext.InstanceTransformUploaderC = InstanceTransformUploadBufferC.Begin(GraphBuilder, InstanceTransformBufferC, InstanceCount, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.TransformsC"));
 		TaskContext.InstanceTransformUploaderD = InstanceTransformUploadBufferD.Begin(GraphBuilder, InstanceTransformBufferD, InstanceCount, sizeof(FVector4f), TEXT("LiteGPUScene.Upload.TransformsD"));
-		TaskContext.InstanceSectorIDUploader = InstanceSectorIDUploadBuffer.Begin(GraphBuilder, InstanceSectorIDBuffer, InstanceCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.SectorIDs"));
 		TaskContext.InstanceTypeUploader = InstanceTypeUploadBuffer.Begin(GraphBuilder, InstanceTypeBuffer, InstanceCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.Types"));
 		TaskContext.InstanceSectionNumUploader = InstanceSectionNumUploadBuffer.Begin(GraphBuilder, InstanceSectionNumBuffer, InstanceCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.SectionNums"));
 		TaskContext.InstanceSectionIDUploader = InstanceSectionIDUploadBuffer.Begin(GraphBuilder, InstanceSectionIDBuffer, SceneData.PerSectionMaxNum * InstanceCount, sizeof(uint32), TEXT("LiteGPUScene.Upload.SectionIDs"));
@@ -500,16 +532,22 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 				LockIfValid(RHICmdList, TaskContext.InstanceSectionNumUploader);
 				LockIfValid(RHICmdList, TaskContext.InstanceSectionIDUploader);
 
-				uint32 SectorIndex = 0;
-				for (auto SectorInfo : SceneData.SectorInfos)
+				if (TaskContext.SectorInfoUploader)
 				{
-					TaskContext.SectorInfoUploader->Add(SectorIndex, &SectorInfo);
-					SectorIndex += 1;
+					uint32 SectorIndex = 0;
+					for (auto SectorInfo : SceneData.SectorInfos)
+					{
+						TaskContext.SectorInfoUploader->Add(SectorIndex, &SectorInfo);
+						SectorIndex += 1;
+					}
 				}
 
 				for (auto Index : Update.InstanceIndices)
 				{
-					TaskContext.InstanceSectorIDUploader->Add(Index, SceneData.InstanceSectorIDs.GetData() + Index);
+					if (TaskContext.InstanceSectorIDUploader)
+					{
+						TaskContext.InstanceSectorIDUploader->Add(Index, SceneData.InstanceSectorIDs.GetData() + Index);
+					}
 
 					const auto Transform = SceneData.InstanceTransforms[Index];
 					const auto Matrix = Transform.ToMatrixWithScale();
@@ -544,12 +582,18 @@ void FLiteGPUScene::UpdateInstanceData(FRDGBuilder& GraphBuilder)
 				UnlockIfValid(RHICmdList, TaskContext.InstanceSectionIDUploader);
 			});
 		{
-			SectorInfoUploadBuffer.End(GraphBuilder, TaskContext.SectorInfoUploader);
+			if (TaskContext.SectorInfoUploader)
+			{
+				SectorInfoUploadBuffer.End(GraphBuilder, TaskContext.SectorInfoUploader);
+			}
+			if (TaskContext.InstanceSectorIDUploader)
+			{
+				InstanceSectorIDUploadBuffer.End(GraphBuilder, TaskContext.InstanceSectorIDUploader);
+			}
 			InstanceTransformUploadBufferA.End(GraphBuilder, TaskContext.InstanceTransformUploaderA);
 			InstanceTransformUploadBufferB.End(GraphBuilder, TaskContext.InstanceTransformUploaderB);
 			InstanceTransformUploadBufferC.End(GraphBuilder, TaskContext.InstanceTransformUploaderC);
 			InstanceTransformUploadBufferD.End(GraphBuilder, TaskContext.InstanceTransformUploaderD);
-			InstanceSectorIDUploadBuffer.End(GraphBuilder, TaskContext.InstanceSectorIDUploader);
 			InstanceTypeUploadBuffer.End(GraphBuilder, TaskContext.InstanceTypeUploader);
 			InstanceSectionNumUploadBuffer.End(GraphBuilder, TaskContext.InstanceSectionNumUploader);
 			InstanceSectionIDUploadBuffer.End(GraphBuilder, TaskContext.InstanceSectionIDUploader);

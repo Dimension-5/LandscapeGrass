@@ -77,6 +77,10 @@ class FClearLiteGPUSceneResCS : public FGlobalShader
 	DECLARE_GLOBAL_SHADER(FClearLiteGPUSceneResCS);
 	SHADER_USE_PARAMETER_STRUCT(FClearLiteGPUSceneResCS, FGlobalShader);
 
+	class FUseScreenSize : SHADER_PERMUTATION_BOOL("SCREEN_SIZE_CULLING");
+	class FUseDistance : SHADER_PERMUTATION_BOOL("DISTANCE_CULLING");
+	using FPermutationDomain = TShaderPermutationDomain<FUseScreenSize, FUseDistance>;
+
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER(uint32, NumInstances)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceBuffer)
@@ -91,6 +95,23 @@ public:
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.SetDefine(TEXT("THREAD_COUNT"), LITE_GPU_SCENE_COMPUTE_THREAD_NUM);
 		// OutEnvironment.SetDefine(TEXT("ENABLE_LITE_GPU_SCENE_DEBUG"), ENABLE_LITE_GPU_SCENE_DEBUG);
+		FPermutationDomain PermutationVector(Parameters.PermutationId);
+		if (PermutationVector.Get<FUseScreenSize>())
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_SCREEN_SIZE_CULLING"), 1);
+		}		
+		else
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_SCREEN_SIZE_CULLING"), 0);
+		}
+		if (PermutationVector.Get<FUseDistance>())
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_DISTANCE_CULLING"), 1);
+		}
+		else
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_DISTANCE_CULLING"), 0);
+		}
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FClearLiteGPUSceneResCS, "/Engine/Private/LiteGPUSceneCulling.usf", "ClearGPUCullingResCS", SF_Compute);
@@ -100,7 +121,9 @@ class FLiteGPUSceneCullingCS : public FGlobalShader
 	DECLARE_GLOBAL_SHADER(FLiteGPUSceneCullingCS);
 	SHADER_USE_PARAMETER_STRUCT(FLiteGPUSceneCullingCS, FGlobalShader);
 	class FWaveOps : SHADER_PERMUTATION_BOOL("DIM_WAVE_OPS");
-	using FPermutationDomain = TShaderPermutationDomain<FWaveOps>;
+	class FUseScreenSize : SHADER_PERMUTATION_BOOL("SCREEN_SIZE_CULLING");
+	class FUseDistance : SHADER_PERMUTATION_BOOL("DISTANCE_CULLING");
+	using FPermutationDomain = TShaderPermutationDomain<FWaveOps, FUseScreenSize, FUseDistance>;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER(uint32, NumInstances)
@@ -140,6 +163,22 @@ public:
 		{
 			OutEnvironment.CompilerFlags.Add(CFLAG_WaveOperations);
 		}
+		if (PermutationVector.Get<FUseScreenSize>())
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_SCREEN_SIZE_CULLING"), 1);
+		}
+		else
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_SCREEN_SIZE_CULLING"), 0);
+		}
+		if (PermutationVector.Get<FUseDistance>())
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_DISTANCE_CULLING"), 1);
+		}
+		else
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_DISTANCE_CULLING"), 0);
+		}
 	}
 };
 IMPLEMENT_GLOBAL_SHADER(FLiteGPUSceneCullingCS, "/Engine/Private/LiteGPUSceneCulling.usf", "LiteGPUSceneCullingCS", SF_Compute);
@@ -177,6 +216,8 @@ class FCountingInstanceIndiceCS : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FCountingInstanceIndiceCS);
 	SHADER_USE_PARAMETER_STRUCT(FCountingInstanceIndiceCS, FGlobalShader);
+	class FUseScreenSize : SHADER_PERMUTATION_BOOL("SCREEN_SIZE_CULLING");
+	using FPermutationDomain = TShaderPermutationDomain<FUseScreenSize>;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER(int32, PerSectionMaxNum)
@@ -214,6 +255,16 @@ public:
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.SetDefine(TEXT("THREAD_COUNT"), LITE_GPU_SCENE_COMPUTE_THREAD_NUM);
 		OutEnvironment.SetDefine(TEXT("Generate_Instance_Count_Pass"), LITE_GPU_SCENE_COMPUTE_THREAD_NUM);
+
+		FPermutationDomain PermutationVector(Parameters.PermutationId);
+		if (PermutationVector.Get<FUseScreenSize>())
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_SCREEN_SIZE_CULLING"), 1);
+		}
+		else
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_SCREEN_SIZE_CULLING"), 0);
+		}
 		// OutEnvironment.SetDefine(TEXT("ENABLE_LITE_GPU_SCENE_DEBUG"), ENABLE_LITE_GPU_SCENE_DEBUG);
 	}
 };
@@ -223,6 +274,8 @@ class FGenerateInstanceIndiceCS : public FGlobalShader
 {
 	DECLARE_GLOBAL_SHADER(FGenerateInstanceIndiceCS);
 	SHADER_USE_PARAMETER_STRUCT(FGenerateInstanceIndiceCS, FGlobalShader);
+	class FUseScreenSize : SHADER_PERMUTATION_BOOL("SCREEN_SIZE_CULLING");
+	using FPermutationDomain = TShaderPermutationDomain<FUseScreenSize>;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER(int32, PerSectionMaxNum)
@@ -261,6 +314,16 @@ public:
 	{
 		FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
 		OutEnvironment.SetDefine(TEXT("THREAD_COUNT"), LITE_GPU_SCENE_COMPUTE_THREAD_NUM);
+
+		FPermutationDomain PermutationVector(Parameters.PermutationId);
+		if (PermutationVector.Get<FUseScreenSize>())
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_SCREEN_SIZE_CULLING"), 1);
+		}
+		else
+		{
+			OutEnvironment.SetDefine(TEXT("LITE_GPU_SCENE_SCREEN_SIZE_CULLING"), 0);
+		}
 		// OutEnvironment.SetDefine(TEXT("ENABLE_LITE_GPU_SCENE_DEBUG"), ENABLE_LITE_GPU_SCENE_DEBUG);
 	}
 };
@@ -295,28 +358,28 @@ namespace LiteGPUScene::Detail
 {
 	struct BufferBlackboard
 	{
-		FRDGBufferRef RWSectionCountBuffer;
-		FRDGBufferRef RWSectionCountCopyBuffer;
-		FRDGBufferRef RWSectionCountOffsetBuffer;
-		FRDGBufferRef RWNextSectionCountOffsetBuffer;
+		FRDGBufferRef RWSectionCountBuffer = nullptr;
+		FRDGBufferRef RWSectionCountCopyBuffer = nullptr;
+		FRDGBufferRef RWSectionCountOffsetBuffer = nullptr;
+		FRDGBufferRef RWNextSectionCountOffsetBuffer = nullptr;
 
-		FRDGBufferRef RWUnCulledInstanceScreenSize;
-		FRDGBufferRef RWUnCulledInstanceBuffer;
-		FRDGBufferRef RWUnCulledInstanceNum;
-		FRDGBufferRef RWIndirectDrawDispatchIndiretBuffer;
-		FRDGBufferRef RWInstanceIndiceBuffer;
-		FRDGBufferRef RWIndirectDrawBuffer;
-		FRDGBufferRef RWUnCulledInstanceIndirectParameters;
+		FRDGBufferRef RWUnCulledInstanceScreenSize = nullptr;
+		FRDGBufferRef RWUnCulledInstanceBuffer = nullptr;
+		FRDGBufferRef RWUnCulledInstanceNum = nullptr;
+		FRDGBufferRef RWIndirectDrawDispatchIndiretBuffer = nullptr;
+		FRDGBufferRef RWInstanceIndiceBuffer = nullptr;
+		FRDGBufferRef RWIndirectDrawBuffer = nullptr;
+		FRDGBufferRef RWUnCulledInstanceIndirectParameters = nullptr;
 
-		FRDGBufferRef SectionInfoBuffer;
-		FRDGBufferRef MeshAABBBuffer;
-		FRDGBufferRef InstanceTypeBuffer;
-		FRDGBufferRef InstanceSectionNumBuffer;
-		FRDGBufferRef InstanceSectionIDBuffer;
-		FRDGBufferRef InstanceTransformBufferA;
-		FRDGBufferRef InstanceTransformBufferB;
-		FRDGBufferRef InstanceTransformBufferC;
-		FRDGBufferRef InstanceTransformBufferD;
+		FRDGBufferRef SectionInfoBuffer = nullptr;
+		FRDGBufferRef MeshAABBBuffer = nullptr;
+		FRDGBufferRef InstanceTypeBuffer = nullptr;
+		FRDGBufferRef InstanceSectionNumBuffer = nullptr;
+		FRDGBufferRef InstanceSectionIDBuffer = nullptr;
+		FRDGBufferRef InstanceTransformBufferA = nullptr;
+		FRDGBufferRef InstanceTransformBufferB = nullptr;
+		FRDGBufferRef InstanceTransformBufferC = nullptr;
+		FRDGBufferRef InstanceTransformBufferD = nullptr;
 	};
 
 	void Clear(FRDGBuilder& GraphBuilder
@@ -330,12 +393,18 @@ namespace LiteGPUScene::Detail
 		auto ClearParameters = GraphBuilder.AllocParameters<FClearLiteGPUSceneResCS::FParameters>();
 		ClearParameters->NumInstances = InstanceNum;
 		ClearParameters->RWUnCulledInstanceBuffer = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceBuffer, PF_R32_SINT);
-		ClearParameters->RWUnCulledInstanceScreenSize = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+		if (Buffers.RWUnCulledInstanceScreenSize)
+		{
+			ClearParameters->RWUnCulledInstanceScreenSize = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+		}
 		ClearParameters->RWUnCulledInstanceNum = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceNum, PF_R32_UINT);
 
 		// GET COMPUTE SHADER
 		const auto& ShaderMap = GetGlobalShaderMap(View.FeatureLevel);
-		TShaderMapRef<FClearLiteGPUSceneResCS> ClearShader(ShaderMap);
+		FClearLiteGPUSceneResCS::FPermutationDomain PermutationVector;
+		PermutationVector.Set<FClearLiteGPUSceneResCS::FUseScreenSize>((bool)Buffers.RWUnCulledInstanceScreenSize);
+		PermutationVector.Set<FClearLiteGPUSceneResCS::FUseDistance>(0);
+		TShaderMapRef<FClearLiteGPUSceneResCS> ClearShader(ShaderMap, PermutationVector);
 
 		// CALCULATE AND DISPATCH
 		const auto NumThreadGroups = FMath::DivideAndRoundUp<uint32>(InstanceNum, LITE_GPU_SCENE_COMPUTE_THREAD_NUM);
@@ -408,7 +477,10 @@ namespace LiteGPUScene::Detail
 			CullParameters->HZBTexture = View.HZB;
 		}
 		CullParameters->RWUnCulledInstanceBuffer = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceBuffer, PF_R32_SINT);
-		CullParameters->RWUnCulledInstanceScreenSize = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+		if (Buffers.RWUnCulledInstanceScreenSize)
+		{
+			CullParameters->RWUnCulledInstanceScreenSize = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+		}
 		CullParameters->RWUnCulledInstanceNum = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceNum, PF_R32_UINT);
 		CullParameters->AABBBuffer = GraphBuilder.CreateSRV(Buffers.MeshAABBBuffer, PF_A32B32G32R32F);
 		CullParameters->InstanceTypeBuffer = GraphBuilder.CreateSRV(Buffers.InstanceTypeBuffer, PF_R32_UINT);
@@ -421,6 +493,8 @@ namespace LiteGPUScene::Detail
 		FLiteGPUSceneCullingCS::FPermutationDomain PermutationVector;
 		const bool bUseWaveOps = GRHISupportsWaveOperations && GRHIMinimumWaveSize >= 32 && GLiteGPUSceneCullingUseWaveOps;
 		PermutationVector.Set<FLiteGPUSceneCullingCS::FWaveOps>(bUseWaveOps);
+		PermutationVector.Set<FLiteGPUSceneCullingCS::FUseScreenSize>((bool)Buffers.RWUnCulledInstanceScreenSize);
+		PermutationVector.Set<FLiteGPUSceneCullingCS::FUseDistance>(0);
 		const auto& ShaderMap = GetGlobalShaderMap(View.FeatureLevel);
 		TShaderMapRef<FLiteGPUSceneCullingCS> CullingShader(ShaderMap, PermutationVector);
 
@@ -493,7 +567,10 @@ namespace LiteGPUScene::Detail
 			Parameters->InstanceMaxScreenSize = sLiteGPUSceneMaxScreenSize;
 			Parameters->AllSectionNum = AllSectionNum;
 
-			Parameters->UnCulledInstanceScreenSize = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+			if (Buffers.RWUnCulledInstanceScreenSize)
+			{
+				Parameters->UnCulledInstanceScreenSize = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+			}
 			Parameters->UnCulledInstanceBuffer = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceBuffer, PF_R32_UINT);
 			Parameters->UnCulledInstanceNum = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceNum, PF_R32_UINT);
 			
@@ -512,7 +589,9 @@ namespace LiteGPUScene::Detail
 
 			// GET COMPUTE SHADER
 			const auto& ShaderMap = GetGlobalShaderMap(View.FeatureLevel);
-			TShaderMapRef<FCountingInstanceIndiceCS> CountShader(ShaderMap);
+			FCountingInstanceIndiceCS::FPermutationDomain PermutationVector;
+			PermutationVector.Set<FCountingInstanceIndiceCS::FUseScreenSize>((bool)Buffers.RWUnCulledInstanceScreenSize);
+			TShaderMapRef<FCountingInstanceIndiceCS> CountShader(ShaderMap, PermutationVector);
 
 			// CALCULATE AND DISPATCH
 			FComputeShaderUtils::AddPass(
@@ -564,7 +643,10 @@ namespace LiteGPUScene::Detail
 			Parameters->InstanceMaxScreenSize = sLiteGPUSceneMaxScreenSize;
 			Parameters->AllSectionNum = AllSectionNum;
 
-			Parameters->UnCulledInstanceScreenSize = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+			if (Buffers.RWUnCulledInstanceScreenSize)
+			{
+				Parameters->UnCulledInstanceScreenSize = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceScreenSize, PF_R32_FLOAT);
+			}
 			Parameters->UnCulledInstanceBuffer = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceBuffer, PF_R32_UINT);
 			Parameters->UnCulledInstanceNum = GraphBuilder.CreateSRV(Buffers.RWUnCulledInstanceNum, PF_R32_UINT);
 
@@ -585,7 +667,9 @@ namespace LiteGPUScene::Detail
 
 			// GET COMPUTE SHADER
 			const auto& ShaderMap = GetGlobalShaderMap(View.FeatureLevel);
-			TShaderMapRef<FGenerateInstanceIndiceCS> DrawGenShader(ShaderMap);
+			FGenerateInstanceIndiceCS::FPermutationDomain PermutationVector;
+			PermutationVector.Set<FGenerateInstanceIndiceCS::FUseScreenSize>((bool)Buffers.RWUnCulledInstanceScreenSize);
+			TShaderMapRef<FGenerateInstanceIndiceCS> DrawGenShader(ShaderMap, PermutationVector);
 
 			// CALCULATE AND DISPATCH
 			FComputeShaderUtils::AddPass(
@@ -637,7 +721,10 @@ void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View
 		auto CounterBufferState = Proxy->Scene->GetCounterBufferState();
 
 		Detail::BufferBlackboard Buffers;
-		Buffers.RWUnCulledInstanceScreenSize = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWUnCulledInstanceScreenSize);
+		if (ViewBufferState.RWUnCulledInstanceScreenSize)
+		{
+			Buffers.RWUnCulledInstanceScreenSize = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWUnCulledInstanceScreenSize);
+		}
 		Buffers.RWUnCulledInstanceBuffer = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWUnCulledInstanceBuffer);
 		Buffers.RWUnCulledInstanceNum = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWUnCulledInstanceNum);
 		Buffers.RWIndirectDrawDispatchIndiretBuffer = GraphBuilder.RegisterExternalBuffer(ViewBufferState.RWIndirectDrawDispatchIndiretBuffer);

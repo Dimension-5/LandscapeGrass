@@ -28,7 +28,9 @@ float4x4 FrustumPermutedPlanes0;
 float4x4 FrustumPermutedPlanes1;
 
 RWBuffer<int> RWUnCulledInstanceBuffer;
+#if LITE_GPU_SCENE_SCREEN_SIZE_CULLING
 RWBuffer<float> RWUnCulledInstanceScreenSize;
+#endif
 
 RWBuffer<uint> RWUnCulledInstanceNum;
 RWBuffer<uint> RWUnCulledInstanceIndirectParameters;
@@ -217,8 +219,12 @@ void LiteGPUSceneCullingCS(uint3 DTid : SV_DispatchThreadID)
 		bool bInFrustum0 = FrustumCullingInstance(FrustumPermutedPlanes0, AABBCenter, AABBExtent);
 		bool bInFrustum1 = FrustumCullingInstance(FrustumPermutedPlanes1, AABBCenter, AABBExtent);
 		
+#if LITE_GPU_SCENE_SCREEN_SIZE_CULLING
 		float ScreenSize = ComputeBoundsScreenSize(AABBCenter.xyz, radius, ViewLocation, ProjMatrix);
 		RWUnCulledInstanceScreenSize[InstanceID] = ScreenSize;
+#else
+		float ScreenSize = 1.f;
+#endif
 		
 		if (bInFrustum0 && bInFrustum1)
 		{
@@ -277,7 +283,9 @@ void ClearGPUCullingResCS(uint3 DTid : SV_DispatchThreadID)
 		RWCulledInstanceBuffer[UniqueID] = -1;
 #endif
 		RWUnCulledInstanceBuffer[UniqueID] = -1;
+#if LITE_GPU_SCENE_SCREEN_SIZE_CULLING
 		RWUnCulledInstanceScreenSize[UniqueID] = 0;
+#endif
 	}
 	
 	if (UniqueID == 0)

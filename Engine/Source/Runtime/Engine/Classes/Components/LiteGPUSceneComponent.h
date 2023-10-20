@@ -46,6 +46,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Components|LiteGPUScene")
 	virtual bool ClearInstances();
 
+	/** Sets the fading start and culling end distances for this component. */
+	// UFUNCTION(BlueprintCallable, Category = "Components|LiteGPUScene")
+	// void SetCullDistances(int32 StartCullDistance, int32 EndCullDistance);
+
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
 	FPrimitiveSceneProxy* CreateSceneProxy() override;
