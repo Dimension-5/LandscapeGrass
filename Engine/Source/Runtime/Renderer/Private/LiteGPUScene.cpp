@@ -357,9 +357,13 @@ void FLiteGPUScene::UpdateCullDistance(FRDGBuilder& GraphBuilder, TArray<UStatic
 			}
 			MeshIndex += 1;
 		}
+
+		const auto N = FMath::DivideAndRoundUp(SceneData.InstanceTypeNum, 2) + 1;
+		const auto X = sizeof(FUint32Vector2);
+
 		FResizeResourceSOAParams ResizeParams;
-		ResizeParams.NumBytes = SceneData.InstanceTypeNum * sizeof(FUint32Vector2);
-		ResizeParams.NumArrays = 2;
+		ResizeParams.NumBytes = N * X;
+		ResizeParams.NumArrays = 1;
 		auto MeshCullDistancesBuffer = ResizeStructuredBufferSOAIfNeeded(GraphBuilder, BufferState.MeshCullDistanceBuffer, ResizeParams, TEXT("LiteGPUScene.CullDistances"));
 
 		struct FTaskContext
@@ -367,7 +371,7 @@ void FLiteGPUScene::UpdateCullDistance(FRDGBuilder& GraphBuilder, TArray<UStatic
 			FRDGScatterUploader* CullDistanceUploader = nullptr;
 		};
 		FTaskContext& TaskContext = *GraphBuilder.AllocObject<FTaskContext>();
-		TaskContext.CullDistanceUploader = MeshCullDistanceUploadBuffer.Begin(GraphBuilder, MeshCullDistancesBuffer, SceneData.InstanceTypeNum, sizeof(FUint32Vector2), TEXT("LiteGPUScene.Upload.CullDistances"));
+		TaskContext.CullDistanceUploader = MeshCullDistanceUploadBuffer.Begin(GraphBuilder, MeshCullDistancesBuffer, N, X, TEXT("LiteGPUScene.Upload.CullDistances"));
 		GraphBuilder.AddCommandListSetupTask([&TaskContext, DistancesArray](FRHICommandListBase& RHICmdList) {
 			SCOPED_NAMED_EVENT(UpdateLiteGPUScene_CullDistances, FColor::Green);
 			LockIfValid(RHICmdList, TaskContext.CullDistanceUploader);
