@@ -26,7 +26,7 @@ struct ILiteGPUSceneInstanceHandler
 };
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class ENGINE_API ULiteGPUSceneComponent : public UPrimitiveComponent
+class ENGINE_API ULiteGPUSceneComponent : public UActorComponent
 {
 	GENERATED_BODY()
 public:
@@ -52,7 +52,6 @@ public:
 
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
-	FPrimitiveSceneProxy* CreateSceneProxy() override;
 
 	TObjectPtr<class UStaticMesh> GetUnderlyingMesh() { return StaticMesh; }
 	uint32 GetStartCullDistance() const { return StartCullDistance; }

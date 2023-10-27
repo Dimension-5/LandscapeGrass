@@ -123,11 +123,6 @@ void ULiteGPUSceneComponent::OnUnregister()
 }
 
 // TODO: REMOVE THIS
-FPrimitiveSceneProxy* ULiteGPUSceneComponent::CreateSceneProxy()
-{
-	return nullptr;
-}
-
 FLiteGPUSceneProxy::FLiteGPUSceneProxy(ULiteGPUSceneRenderComponent* Component, ERHIFeatureLevel::Type InFeatureLevel)
 	: FPrimitiveSceneProxy(Component, TEXT("LiteGPUScene")),
 	Scene(Component->Scene)

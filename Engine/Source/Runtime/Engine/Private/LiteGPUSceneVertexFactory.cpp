@@ -144,4 +144,5 @@ IMPLEMENT_VERTEX_FACTORY_TYPE(FLiteGPUSceneVertexFactory, "/Engine/Private/LiteG
 	| EVertexFactoryFlags::SupportsStaticLighting
 	| EVertexFactoryFlags::SupportsDynamicLighting
 	| EVertexFactoryFlags::SupportsPositionOnly
+	// | EVertexFactoryFlags::SupportsPSOPrecaching
 );
