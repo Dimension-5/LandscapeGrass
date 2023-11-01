@@ -13,10 +13,7 @@
 #define USE_INSTANCING 1
 #endif
 
-Buffer<float4> VertexFetch_PerInstanceTransformAParameter;
-Buffer<float4> VertexFetch_PerInstanceTransformBParameter;
-Buffer<float4> VertexFetch_PerInstanceTransformCParameter;
-Buffer<float4> VertexFetch_PerInstanceTransformDParameter;
+Buffer<float4> VertexFetch_PerInstanceTransformParameter;
 // Buffer<float> VertexFetch_PerInstanceScale;
 
 /**
@@ -97,10 +94,10 @@ float4x4 GetInstanceTransform(FVertexFactoryIntermediates Intermediates)
 float4x4 GetInstanceTransform(FPositionOnlyVertexFactoryInput Input)
 {
 	uint InstanceIndex = floor(Input.GPUDrivenInstanceIndex + 0.5f);
-	float4 InstanceTransform0 = VertexFetch_PerInstanceTransformAParameter[InstanceIndex];
-	float4 InstanceTransform1 = VertexFetch_PerInstanceTransformBParameter[InstanceIndex];
-	float4 InstanceTransform2 = VertexFetch_PerInstanceTransformCParameter[InstanceIndex];
-	float4 InstanceTransform3 = VertexFetch_PerInstanceTransformDParameter[InstanceIndex];
+	float4 InstanceTransform0 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 0];
+	float4 InstanceTransform1 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 1];
+	float4 InstanceTransform2 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 2];
+	float4 InstanceTransform3 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 3];
 	
 	return float4x4(InstanceTransform0, InstanceTransform1, InstanceTransform2, InstanceTransform3);
 }
@@ -108,10 +105,10 @@ float4x4 GetInstanceTransform(FPositionOnlyVertexFactoryInput Input)
 float4x4 GetInstanceTransform(FPositionAndNormalOnlyVertexFactoryInput Input)
 {
 	uint InstanceIndex = floor(Input.GPUDrivenInstanceIndex + 0.5f);
-	float4 InstanceTransform0 = VertexFetch_PerInstanceTransformAParameter[InstanceIndex];
-	float4 InstanceTransform1 = VertexFetch_PerInstanceTransformBParameter[InstanceIndex];
-	float4 InstanceTransform2 = VertexFetch_PerInstanceTransformCParameter[InstanceIndex];
-	float4 InstanceTransform3 = VertexFetch_PerInstanceTransformDParameter[InstanceIndex];
+	float4 InstanceTransform0 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 0];
+	float4 InstanceTransform1 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 1];
+	float4 InstanceTransform2 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 2];
+	float4 InstanceTransform3 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 3];
 	return float4x4(InstanceTransform0, InstanceTransform1, InstanceTransform2, InstanceTransform3);
 }
 
@@ -289,10 +286,10 @@ FVertexFactoryIntermediates GetVertexFactoryIntermediates(FVertexFactoryInput In
 
 	uint InstanceIndex = floor(Input.GPUDrivenInstanceIndex + 0.5f);
 
-	float4 InstanceTransform0 = VertexFetch_PerInstanceTransformAParameter[InstanceIndex];
-	float4 InstanceTransform1 = VertexFetch_PerInstanceTransformBParameter[InstanceIndex];
-	float4 InstanceTransform2 = VertexFetch_PerInstanceTransformCParameter[InstanceIndex];
-	float4 InstanceTransform3 = VertexFetch_PerInstanceTransformDParameter[InstanceIndex];
+	float4 InstanceTransform0 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 0];
+	float4 InstanceTransform1 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 1];
+	float4 InstanceTransform2 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 2];
+	float4 InstanceTransform3 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 3];
 	
 	// Intermediates.InstanceScale = VertexFetch_PerInstanceScale[InstanceIndex];
 	Intermediates.InstanceScale = 1.f;
@@ -394,10 +391,10 @@ float4 VertexFactoryGetWorldPosition(FPositionAndNormalOnlyVertexFactoryInput In
 float3 VertexFactoryGetWorldNormal(FPositionAndNormalOnlyVertexFactoryInput Input)
 {
 	uint InstanceIndex = floor(Input.GPUDrivenInstanceIndex + 0.5f);
-	float4 InstanceTransform0 = VertexFetch_PerInstanceTransformAParameter[InstanceIndex];
-	float4 InstanceTransform1 = VertexFetch_PerInstanceTransformBParameter[InstanceIndex];
-	float4 InstanceTransform2 = VertexFetch_PerInstanceTransformCParameter[InstanceIndex];
-	float4 InstanceTransform3 = VertexFetch_PerInstanceTransformDParameter[InstanceIndex];
+	float4 InstanceTransform0 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 0];
+	float4 InstanceTransform1 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 1];
+	float4 InstanceTransform2 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 2];
+	float4 InstanceTransform3 = VertexFetch_PerInstanceTransformParameter[InstanceIndex * 4 + 3];
 	
 	float4x4 InstanceTransform = float4x4(
 											InstanceTransform0,

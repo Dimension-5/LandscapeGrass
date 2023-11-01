@@ -141,10 +141,7 @@ class FLiteGPUSceneCullingCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, HZBTexture)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, AABBBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, CullDistanceBuffer)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferA)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferB)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferC)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferD)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTypeBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(RWBuffer, RWUnCulledInstanceNum)
@@ -238,10 +235,7 @@ class FCountingInstanceIndiceCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceSectionNumBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceSectionIDBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, AllSectionInfoBuffer)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferA)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferB)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferC)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferD)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, AABBSectionBuffer)
 
 		//------------------------------------//
@@ -296,10 +290,7 @@ class FGenerateInstanceIndiceCS : public FGlobalShader
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceSectionNumBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceSectionIDBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, AllSectionInfoBuffer)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferA)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferB)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferC)
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBufferD)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, InstanceTransformBuffer)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer, AABBSectionBuffer)
 
 		//------------------------------------//
@@ -378,10 +369,7 @@ namespace LiteGPUScene::Detail
 		FRDGBufferRef InstanceTypeBuffer = nullptr;
 		FRDGBufferRef InstanceSectionNumBuffer = nullptr;
 		FRDGBufferRef InstanceSectionIDBuffer = nullptr;
-		FRDGBufferRef InstanceTransformBufferA = nullptr;
-		FRDGBufferRef InstanceTransformBufferB = nullptr;
-		FRDGBufferRef InstanceTransformBufferC = nullptr;
-		FRDGBufferRef InstanceTransformBufferD = nullptr;
+		FRDGBufferRef InstanceTransformBuffer;
 	};
 
 	void Clear(FRDGBuilder& GraphBuilder
@@ -490,10 +478,7 @@ namespace LiteGPUScene::Detail
 		CullParameters->RWUnCulledInstanceNum = GraphBuilder.CreateUAV(Buffers.RWUnCulledInstanceNum, PF_R32_UINT);
 		CullParameters->AABBBuffer = GraphBuilder.CreateSRV(Buffers.MeshAABBBuffer, PF_A32B32G32R32F);
 		CullParameters->InstanceTypeBuffer = GraphBuilder.CreateSRV(Buffers.InstanceTypeBuffer, PF_R32_UINT);
-		CullParameters->InstanceTransformBufferA = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferA, PF_A32B32G32R32F);
-		CullParameters->InstanceTransformBufferB = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferB, PF_A32B32G32R32F);
-		CullParameters->InstanceTransformBufferC = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferC, PF_A32B32G32R32F);
-		CullParameters->InstanceTransformBufferD = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferD, PF_A32B32G32R32F);
+		CullParameters->InstanceTransformBuffer = GraphBuilder.CreateSRV(Buffers.InstanceTransformBuffer, PF_A32B32G32R32F);
 
 		// GET COMPUTE SHADER
 		FLiteGPUSceneCullingCS::FPermutationDomain PermutationVector;
@@ -585,10 +570,7 @@ namespace LiteGPUScene::Detail
 			Parameters->InstanceSectionIDBuffer = GraphBuilder.CreateSRV(Buffers.InstanceSectionIDBuffer, PF_R32_UINT);
 
 			Parameters->AllSectionInfoBuffer = GraphBuilder.CreateSRV(Buffers.SectionInfoBuffer, PF_A32B32G32R32F);
-			Parameters->InstanceTransformBufferA = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferA, PF_A32B32G32R32F);
-			Parameters->InstanceTransformBufferB = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferB, PF_A32B32G32R32F);
-			Parameters->InstanceTransformBufferC = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferC, PF_A32B32G32R32F);
-			Parameters->InstanceTransformBufferD = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferD, PF_A32B32G32R32F);
+			Parameters->InstanceTransformBuffer = GraphBuilder.CreateSRV(Buffers.InstanceTransformBuffer, PF_A32B32G32R32F);
 			Parameters->AABBSectionBuffer = GraphBuilder.CreateSRV(Buffers.MeshAABBBuffer, PF_A32B32G32R32F);
 			
 			Parameters->RWSectionCountCopyBuffer = GraphBuilder.CreateUAV(Buffers.RWSectionCountCopyBuffer, PF_R32_UINT);
@@ -661,10 +643,7 @@ namespace LiteGPUScene::Detail
 			Parameters->InstanceSectionIDBuffer = GraphBuilder.CreateSRV(Buffers.InstanceSectionIDBuffer, PF_R32_UINT);
 
 			Parameters->AllSectionInfoBuffer = GraphBuilder.CreateSRV(Buffers.SectionInfoBuffer, PF_A32B32G32R32F);
-			Parameters->InstanceTransformBufferA = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferA, PF_A32B32G32R32F);
-			Parameters->InstanceTransformBufferB = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferB, PF_A32B32G32R32F);
-			Parameters->InstanceTransformBufferC = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferC, PF_A32B32G32R32F);
-			Parameters->InstanceTransformBufferD = GraphBuilder.CreateSRV(Buffers.InstanceTransformBufferD, PF_A32B32G32R32F);
+			Parameters->InstanceTransformBuffer = GraphBuilder.CreateSRV(Buffers.InstanceTransformBuffer, PF_A32B32G32R32F);
 			Parameters->AABBSectionBuffer = GraphBuilder.CreateSRV(Buffers.MeshAABBBuffer, PF_A32B32G32R32F);
 
 			Parameters->SectionCountOffsetBuffer = GraphBuilder.CreateSRV(Buffers.RWSectionCountOffsetBuffer, PF_R32_UINT);
@@ -744,10 +723,7 @@ void AddLiteGPUSceneCullingPass(FRDGBuilder& GraphBuilder, const FViewInfo& View
 		
 		Buffers.SectionInfoBuffer = GraphBuilder.RegisterExternalBuffer(SceneBufferState.SectionInfoBuffer);
 		Buffers.MeshAABBBuffer = GraphBuilder.RegisterExternalBuffer(SceneBufferState.MeshAABBBuffer);
-		Buffers.InstanceTransformBufferA = GraphBuilder.RegisterExternalBuffer(SceneBufferState.InstanceTransformBufferA);
-		Buffers.InstanceTransformBufferB = GraphBuilder.RegisterExternalBuffer(SceneBufferState.InstanceTransformBufferB);
-		Buffers.InstanceTransformBufferC = GraphBuilder.RegisterExternalBuffer(SceneBufferState.InstanceTransformBufferC);
-		Buffers.InstanceTransformBufferD = GraphBuilder.RegisterExternalBuffer(SceneBufferState.InstanceTransformBufferD);
+		Buffers.InstanceTransformBuffer = GraphBuilder.RegisterExternalBuffer(SceneBufferState.InstanceTransformBuffer);
 		Buffers.InstanceTypeBuffer = GraphBuilder.RegisterExternalBuffer(SceneBufferState.InstanceTypeBuffer);
 		Buffers.InstanceSectionNumBuffer = GraphBuilder.RegisterExternalBuffer(SceneBufferState.InstanceSectionNumBuffer);
 		Buffers.InstanceSectionIDBuffer = GraphBuilder.RegisterExternalBuffer(SceneBufferState.InstanceSectionIDBuffer);

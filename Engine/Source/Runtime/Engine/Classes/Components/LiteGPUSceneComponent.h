@@ -156,10 +156,7 @@ struct FLiteGPUSceneVertexFactoryShaderParameters : public FLocalVertexFactorySh
 	) const;
 
 private:
-	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceTransformAParameter);
-	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceTransformBParameter);
-	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceTransformCParameter);
-	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceTransformDParameter);
+	LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceTransformParameter);
 	// LAYOUT_FIELD(FShaderResourceParameter, VertexFetch_PerInstanceScale);
 };
 

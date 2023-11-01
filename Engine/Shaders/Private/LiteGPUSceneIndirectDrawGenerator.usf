@@ -102,10 +102,7 @@ Buffer<int> UnCulledInstanceBuffer;
 float3 ViewLocation;
 float3 ViewForward;
 
-Buffer<float4> InstanceTransformBufferA;
-Buffer<float4> InstanceTransformBufferB;
-Buffer<float4> InstanceTransformBufferC;
-Buffer<float4> InstanceTransformBufferD;
+Buffer<float4> InstanceTransformBuffer;
 Buffer<float4> AABBSectionBuffer;
 
 Buffer<uint> InstanceTypeBuffer;
@@ -141,10 +138,10 @@ void GenerateInstanceIndiceCS(uint3 DTid : SV_DispatchThreadID)
 		float Radius = LocalAABBMin.w;
 		float3 LocalAABBExtent = (LocalAABBMax.xyz - LocalAABBMin.xyz) / 2.0f;
 		
-		float4 InstanceTransform0 = InstanceTransformBufferA[InstanceID];
-		float4 InstanceTransform1 = InstanceTransformBufferB[InstanceID];
-		float4 InstanceTransform2 = InstanceTransformBufferC[InstanceID];
-		float4 InstanceTransform3 = InstanceTransformBufferD[InstanceID];
+		float4 InstanceTransform0 = InstanceTransformBuffer[InstanceID * 4 + 0];
+		float4 InstanceTransform1 = InstanceTransformBuffer[InstanceID * 4 + 1];
+		float4 InstanceTransform2 = InstanceTransformBuffer[InstanceID * 4 + 2];
+		float4 InstanceTransform3 = InstanceTransformBuffer[InstanceID * 4 + 3];
 		
 		float4x4 InstanceTransform = float4x4(InstanceTransform0,
 	                InstanceTransform1,

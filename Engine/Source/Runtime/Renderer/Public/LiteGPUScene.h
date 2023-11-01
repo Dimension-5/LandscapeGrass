@@ -161,10 +161,7 @@ struct FLiteGPUSceneBufferState
 	TRefCountPtr<FRDGPooledBuffer> InstanceTypeBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectionNumBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectionIDBuffer;
-	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBufferA;
-	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBufferB;
-	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBufferC;
-	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBufferD;
+	TRefCountPtr<FRDGPooledBuffer> InstanceTransformBuffer;
 	TRefCountPtr<FRDGPooledBuffer> InstanceSectorIDBuffer;
 };
 
@@ -276,10 +273,7 @@ protected:
 	FRDGAsyncScatterUploadBuffer InstanceTypeUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceSectionNumUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceSectionIDUploadBuffer;
-	FRDGAsyncScatterUploadBuffer InstanceTransformUploadBufferA;
-	FRDGAsyncScatterUploadBuffer InstanceTransformUploadBufferB;
-	FRDGAsyncScatterUploadBuffer InstanceTransformUploadBufferC;
-	FRDGAsyncScatterUploadBuffer InstanceTransformUploadBufferD;
+	FRDGAsyncScatterUploadBuffer InstanceTransformUploadBuffer;
 	FRDGAsyncScatterUploadBuffer InstanceSectorIDUploadBuffer;
 
 	const ERHIFeatureLevel::Type FeatureLevel;

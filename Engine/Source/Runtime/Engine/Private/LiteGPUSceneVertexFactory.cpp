@@ -12,10 +12,7 @@ FLiteGPUSceneVertexFactory::FLiteGPUSceneVertexFactory(ERHIFeatureLevel::Type In
 void FLiteGPUSceneVertexFactoryShaderParameters::Bind(const FShaderParameterMap& ParameterMap)
 {
 	FLocalVertexFactoryShaderParametersBase::Bind(ParameterMap);
-	VertexFetch_PerInstanceTransformAParameter.Bind(ParameterMap, TEXT("VertexFetch_PerInstanceTransformAParameter"));
-	VertexFetch_PerInstanceTransformBParameter.Bind(ParameterMap, TEXT("VertexFetch_PerInstanceTransformBParameter"));
-	VertexFetch_PerInstanceTransformCParameter.Bind(ParameterMap, TEXT("VertexFetch_PerInstanceTransformCParameter"));
-	VertexFetch_PerInstanceTransformDParameter.Bind(ParameterMap, TEXT("VertexFetch_PerInstanceTransformDParameter"));
+	VertexFetch_PerInstanceTransformParameter.Bind(ParameterMap, TEXT("VertexFetch_PerInstanceTransformParameter"));
 }
 
 void FLiteGPUSceneVertexFactoryShaderParameters::GetElementShaderBindings(const class FSceneInterface* Scene
@@ -33,14 +30,8 @@ void FLiteGPUSceneVertexFactoryShaderParameters::GetElementShaderBindings(const 
 	if (FLiteGPUSceneProxy* SceneProxy = BatchElementParams->SceneProxy)
 	{
 		const auto& BufferStates = SceneProxy->Scene->BufferState;
-		auto TransformBufferASRV = BufferStates.InstanceTransformBufferA->GetSRV();
-		auto TransformBufferBSRV = BufferStates.InstanceTransformBufferB->GetSRV();
-		auto TransformBufferCSRV = BufferStates.InstanceTransformBufferC->GetSRV();
-		auto TransformBufferDSRV = BufferStates.InstanceTransformBufferD->GetSRV();
-		ShaderBindings.Add(VertexFetch_PerInstanceTransformAParameter, TransformBufferASRV);
-		ShaderBindings.Add(VertexFetch_PerInstanceTransformBParameter, TransformBufferBSRV);
-		ShaderBindings.Add(VertexFetch_PerInstanceTransformCParameter, TransformBufferCSRV);
-		ShaderBindings.Add(VertexFetch_PerInstanceTransformDParameter, TransformBufferDSRV);
+		auto TransformBufferSRV = BufferStates.InstanceTransformBuffer->GetSRV();
+		ShaderBindings.Add(VertexFetch_PerInstanceTransformParameter, TransformBufferSRV);
 	}
 }
 
