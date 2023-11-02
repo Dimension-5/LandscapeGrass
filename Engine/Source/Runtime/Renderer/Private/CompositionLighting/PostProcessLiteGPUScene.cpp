@@ -509,6 +509,8 @@ namespace LiteGPUScene::Detail
 		// TODO
 	}
 
+	TRefCountPtr<FRDGPooledBuffer> OutIndicesBuffer;
+
 	void GenerateDrawArgs(FRDGBuilder& GraphBuilder
 		, const FViewInfo& View
 		, class FLiteGPUSceneProxy* CullingProxy
@@ -665,6 +667,7 @@ namespace LiteGPUScene::Detail
 				Parameters,
 				Buffers.RWIndirectDrawDispatchIndiretBuffer, 0
 			);
+			GraphBuilder.QueueBufferExtraction(Buffers.RWInstanceIndiceBuffer, &OutIndicesBuffer, ERHIAccess::VertexOrIndexBuffer);
 		}
 	}
 

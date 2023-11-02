@@ -358,7 +358,7 @@ void FLiteGPUScene::UpdateCullDistance(FRDGBuilder& GraphBuilder, TArray<UStatic
 			MeshIndex += 1;
 		}
 
-		const auto N = FMath::DivideAndRoundUp(SceneData.InstanceTypeNum, 2) + 1;
+		const auto N = Align(SceneData.InstanceTypeNum + 3, 2);
 		const auto X = sizeof(FUint32Vector2);
 
 		FResizeResourceSOAParams ResizeParams;
